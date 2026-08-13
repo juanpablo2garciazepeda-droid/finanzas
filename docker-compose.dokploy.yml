@@ -10,12 +10,12 @@ services:
       - default
     labels:
       - traefik.docker.network=dokploy-network
-      - traefik.http.routers.juanpa-finanzas-web.rule=Host(`finanzas.hotelcaracolescolima.com.mx`)
+      - traefik.http.routers.juanpa-finanzas-web.rule=Host(`finanzasgz.com.mx`)
       - traefik.http.routers.juanpa-finanzas-web.entrypoints=web
       - traefik.http.routers.juanpa-finanzas-web.service=juanpa-finanzas-web-svc
       - traefik.http.routers.juanpa-finanzas-web.middlewares=redirect-to-https@file
       - traefik.http.services.juanpa-finanzas-web-svc.loadbalancer.server.port=80
-      - traefik.http.routers.juanpa-finanzas-websecure.rule=Host(`finanzas.hotelcaracolescolima.com.mx`)
+      - traefik.http.routers.juanpa-finanzas-websecure.rule=Host(`finanzasgz.com.mx`)
       - traefik.http.routers.juanpa-finanzas-websecure.entrypoints=websecure
       - traefik.http.routers.juanpa-finanzas-websecure.service=juanpa-finanzas-websecure-svc
       - traefik.http.routers.juanpa-finanzas-websecure.tls.certresolver=letsencrypt
