@@ -1,0 +1,26 @@
+# Local build outputs
+node_modules
+dist
+dist-ssr
+.vite
+.cache
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+coverage
+*.lcov

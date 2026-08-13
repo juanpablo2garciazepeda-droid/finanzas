@@ -1,0 +1,20 @@
+{
+  "name": "Juanpa Finanzas",
+  "short_name": "Juanpa Finanzas",
+  "description": "Control de gastos, deudas y metas de ahorro. Tus datos se quedan en este dispositivo.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F5F7",
+  "theme_color": "#F5F5F7",
+  "lang": "es-MX",
+  "icons": [
+    {
+      "src": "./icono.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

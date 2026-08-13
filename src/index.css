@@ -1,0 +1,334 @@
+@import 'tailwindcss';
+
+/*
+ * Lenguaje visual tomado de apple.com/mx: superficies planas, tipografía del
+ * sistema, un solo color de acento y botones en forma de píldora. Los valores
+ * salen de getComputedStyle sobre el sitio, no de memoria.
+ *
+ * El tema tiene tres estados. `data-tema` vale "claro" u "oscuro" cuando la
+ * persona elige, y no existe cuando deja "sistema"; por eso el bloque de
+ * `prefers-color-scheme` se protege con :not([data-tema='claro']).
+ */
+@theme {
+  /* Superficies del tema claro. */
+  --color-fondo: #f5f5f7;
+  --color-superficie: #ffffff;
+  --color-elevada: #f5f5f7;
+  --color-hundida: #e5e5ea;
+  --color-borde: #d2d2d7;
+  --color-borde-fuerte: #a1a1a6;
+
+  /* Texto */
+  --color-tinta: #1d1d1f;
+  --color-suave: #6e6e73;
+  --color-tenue: #86868b;
+
+  /* Acento. Los valores concretos los fija el bloque [data-acento]. */
+  --color-acento: #0071e3;
+  --color-acento-hondo: #0066cc;
+  --color-acento-suave: #e8f2fd;
+  /* Lo que se escribe ENCIMA del acento. Calculado, no elegido: en claro todos
+     los acentos pasan 4.5:1 contra blanco y ninguno contra negro; en oscuro es
+     exactamente al revés. Un gris claro con letras blancas no se lee. */
+  --color-sobre-acento: #ffffff;
+
+  /* Semáforo. Variantes accesibles: las vivas de iOS no llegan a 4.5:1 sobre
+     blanco, y aquí estos colores también son texto, no solo relleno. */
+  --color-verde: #248a3d;
+  --color-ambar: #b25000;
+  --color-rojo: #d70015;
+
+  /* Tipografía. SF Pro en dispositivos Apple; Inter Tight en el resto. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Tight Variable', ui-sans-serif,
+    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Tight Variable', ui-sans-serif,
+    'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  /* Radios de Apple: 18px en tarjetas, píldora en botones. */
+  --radius-tarjeta: 18px;
+  --radius-campo: 12px;
+
+  --shadow-tarjeta: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --shadow-flotante: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Tema oscuro ──────────────────────────────────────────────────────────── */
+
+:root[data-tema='oscuro'] {
+  --color-fondo: #000000;
+  --color-superficie: #1c1c1e;
+  --color-elevada: #2c2c2e;
+  --color-hundida: #3a3a3c;
+  --color-borde: #38383a;
+  --color-borde-fuerte: #545456;
+
+  --color-tinta: #f5f5f7;
+  --color-suave: #aeaeb2;
+  --color-tenue: #8e8e93;
+
+  /* En oscuro los semáforos vivos de iOS sí tienen contraste de sobra. */
+  --color-verde: #30d158;
+  --color-ambar: #ff9f0a;
+  --color-rojo: #ff453a;
+
+  --color-sobre-acento: #000000;
+
+  --shadow-tarjeta: none;
+  --shadow-flotante: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) {
+    --color-fondo: #000000;
+    --color-superficie: #1c1c1e;
+    --color-elevada: #2c2c2e;
+    --color-hundida: #3a3a3c;
+    --color-borde: #38383a;
+    --color-borde-fuerte: #545456;
+
+    --color-tinta: #f5f5f7;
+    --color-suave: #aeaeb2;
+    --color-tenue: #8e8e93;
+
+    --color-verde: #30d158;
+    --color-ambar: #ff9f0a;
+    --color-rojo: #ff453a;
+
+    --color-sobre-acento: #000000;
+
+    --shadow-tarjeta: none;
+    --shadow-flotante: 0 8px 30px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ── Colores de acento ────────────────────────────────────────────────────── */
+/* Cada uno lleva su par claro/oscuro: un azul que contrasta sobre blanco es
+   demasiado apagado sobre negro, y al revés. */
+
+:root[data-acento='azul'] {
+  --color-acento: #0071e3;
+  --color-acento-hondo: #0066cc;
+  --color-acento-suave: #e8f2fd;
+}
+:root[data-acento='morado'] {
+  --color-acento: #8944ab;
+  --color-acento-hondo: #7a3a99;
+  --color-acento-suave: #f4eaf9;
+}
+:root[data-acento='rosa'] {
+  --color-acento: #c9186b;
+  --color-acento-hondo: #b0125d;
+  --color-acento-suave: #fce9f1;
+}
+:root[data-acento='naranja'] {
+  --color-acento: #bf4b00;
+  --color-acento-hondo: #a64200;
+  --color-acento-suave: #fdeee4;
+}
+:root[data-acento='verde'] {
+  --color-acento: #197a3d;
+  --color-acento-hondo: #146733;
+  --color-acento-suave: #e6f4ea;
+}
+:root[data-acento='grafito'] {
+  --color-acento: #3a3a3c;
+  --color-acento-hondo: #1d1d1f;
+  --color-acento-suave: #ececee;
+}
+
+:root[data-tema='oscuro'][data-acento='azul'],
+:root[data-tema='oscuro']:not([data-acento]) {
+  --color-acento: #0a84ff;
+  --color-acento-hondo: #409cff;
+  --color-acento-suave: #0a84ff26;
+}
+:root[data-tema='oscuro'][data-acento='morado'] {
+  --color-acento: #bf5af2;
+  --color-acento-hondo: #d08cf5;
+  --color-acento-suave: #bf5af226;
+}
+:root[data-tema='oscuro'][data-acento='rosa'] {
+  --color-acento: #ff375f;
+  --color-acento-hondo: #ff6482;
+  --color-acento-suave: #ff375f26;
+}
+:root[data-tema='oscuro'][data-acento='naranja'] {
+  --color-acento: #ff9f0a;
+  --color-acento-hondo: #ffb340;
+  --color-acento-suave: #ff9f0a26;
+}
+:root[data-tema='oscuro'][data-acento='verde'] {
+  --color-acento: #30d158;
+  --color-acento-hondo: #6ade8a;
+  --color-acento-suave: #30d15826;
+}
+:root[data-tema='oscuro'][data-acento='grafito'] {
+  --color-acento: #d1d1d6;
+  --color-acento-hondo: #f5f5f7;
+  --color-acento-suave: #d1d1d626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro'])[data-acento='azul'],
+  :root:not([data-tema='claro']):not([data-acento]) {
+    --color-acento: #0a84ff;
+    --color-acento-hondo: #409cff;
+    --color-acento-suave: #0a84ff26;
+  }
+  :root:not([data-tema='claro'])[data-acento='morado'] {
+    --color-acento: #bf5af2;
+    --color-acento-hondo: #d08cf5;
+    --color-acento-suave: #bf5af226;
+  }
+  :root:not([data-tema='claro'])[data-acento='rosa'] {
+    --color-acento: #ff375f;
+    --color-acento-hondo: #ff6482;
+    --color-acento-suave: #ff375f26;
+  }
+  :root:not([data-tema='claro'])[data-acento='naranja'] {
+    --color-acento: #ff9f0a;
+    --color-acento-hondo: #ffb340;
+    --color-acento-suave: #ff9f0a26;
+  }
+  :root:not([data-tema='claro'])[data-acento='verde'] {
+    --color-acento: #30d158;
+    --color-acento-hondo: #6ade8a;
+    --color-acento-suave: #30d15826;
+  }
+  :root:not([data-tema='claro'])[data-acento='grafito'] {
+    --color-acento: #d1d1d6;
+    --color-acento-hondo: #f5f5f7;
+    --color-acento-suave: #d1d1d626;
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Que los controles nativos (calendarios, selects) sigan al tema. */
+    color-scheme: light;
+  }
+
+  :root[data-tema='oscuro'] {
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tema='claro']) {
+      color-scheme: dark;
+    }
+  }
+
+  body {
+    background-color: var(--color-fondo);
+    color: var(--color-tinta);
+    font-family: var(--font-sans);
+    /* El tracking negativo es lo que hace que un texto "se vea Apple". */
+    letter-spacing: -0.022em;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    transition:
+      background-color 200ms ease,
+      color 200ms ease;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.028em;
+  }
+
+  /* Los montos siempre en cifras de ancho fijo: las columnas de números
+     no bailan al cambiar de dígito. */
+  .cifras {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+  }
+
+  :focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--color-acento) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-tinta);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-elevada) inset;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-borde-fuerte);
+    border-radius: 999px;
+    border: 3px solid var(--color-fondo);
+  }
+}
+
+@layer utilities {
+  .area-segura-inferior {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Barra translúcida con saturación, exactamente como la nav de Apple. */
+  .cristal {
+    background-color: color-mix(in srgb, var(--color-superficie) 72%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+@keyframes entrada-suave {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulso-alerta {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.animar-entrada {
+  animation: entrada-suave 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animar-pulso {
+  animation: pulso-alerta 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
