@@ -25,6 +25,7 @@ import { FormularioPin } from '@/componentes/PantallaBloqueo'
 import { CampoFecha } from '@/componentes/ui/CampoFecha'
 import { Boton, Campo, Entrada, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
+import { Segmentado } from '@/componentes/ui/Segmentado'
 import { SelectorColor, SelectorIcono } from '@/componentes/ui/Selectores'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
 import { descargar, descargarMovimientosCSV } from '@/exportar/csv'
@@ -94,24 +95,15 @@ export function Ajustes() {
         <Tarjeta className="space-y-5">
           <div>
             <span className="mb-2 block text-[13px] font-medium text-suave">Tema</span>
-            <div className="grid grid-cols-3 gap-1 rounded-full bg-elevada p-1">
-              {(['claro', 'oscuro', 'sistema'] as const).map((opcion) => (
-                <button
-                  key={opcion}
-                  type="button"
-                  aria-pressed={ajustes.tema === opcion}
-                  onClick={() => void guardarAjustes({ tema: opcion })}
-                  className={clases(
-                    'rounded-full py-2 text-[15px] font-medium transition-colors',
-                    ajustes.tema === opcion
-                      ? 'bg-superficie text-tinta shadow-sm'
-                      : 'text-suave hover:text-tinta',
-                  )}
-                >
-                  {NOMBRE_TEMA[opcion]}
-                </button>
-              ))}
-            </div>
+            <Segmentado
+              etiqueta="Tema"
+              valor={ajustes.tema}
+              onCambiar={(tema) => void guardarAjustes({ tema })}
+              opciones={(['claro', 'oscuro', 'sistema'] as const).map((valor) => ({
+                valor,
+                etiqueta: NOMBRE_TEMA[valor],
+              }))}
+            />
             <p className="mt-1.5 text-[13px] text-tenue">
               Automático sigue lo que tenga configurado tu teléfono o tu Mac.
             </p>
@@ -174,24 +166,15 @@ export function Ajustes() {
           <CampoIngreso valor={ajustes.ingresoMensual} moneda={ajustes.moneda} locale={ajustes.locale} />
           <div>
             <span className="mb-2 block text-[13px] font-medium text-suave">Cada cuánto cobras</span>
-            <div className="grid grid-cols-3 gap-1 rounded-full bg-elevada p-1">
-              {(['semanal', 'quincenal', 'mensual'] as const).map((opcion) => (
-                <button
-                  key={opcion}
-                  type="button"
-                  aria-pressed={ajustes.cicloPago === opcion}
-                  onClick={() => void guardarAjustes({ cicloPago: opcion })}
-                  className={clases(
-                    'rounded-full py-2 text-[15px] font-medium transition-colors',
-                    ajustes.cicloPago === opcion
-                      ? 'bg-superficie text-tinta shadow-sm'
-                      : 'text-suave hover:text-tinta',
-                  )}
-                >
-                  {NOMBRE_CICLO[opcion]}
-                </button>
-              ))}
-            </div>
+            <Segmentado
+              etiqueta="Cada cuánto cobras"
+              valor={ajustes.cicloPago}
+              onCambiar={(cicloPago) => void guardarAjustes({ cicloPago })}
+              opciones={(['semanal', 'quincenal', 'mensual'] as const).map((valor) => ({
+                valor,
+                etiqueta: NOMBRE_CICLO[valor],
+              }))}
+            />
             <p className="mt-1.5 text-[13px] text-tenue">
               El tablero y el semáforo miden sobre esta ventana. Si cobras por quincena, "cuánto
               puedo gastar" se calcula hasta tu próximo corte, no hasta fin de mes.

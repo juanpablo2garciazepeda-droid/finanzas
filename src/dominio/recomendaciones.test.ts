@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { generarRecomendaciones } from './recomendaciones'
-import { CATEGORIAS, contexto, deuda, meta, presupuesto, transaccion } from './fixtures'
+import { AJUSTES, CATEGORIAS, contexto, deuda, meta, presupuesto, transaccion } from './fixtures'
 
 const SUELDO = transaccion({
   tipo: 'ingreso',
@@ -153,5 +153,52 @@ describe('orden de la lista', () => {
     for (let i = 1; i < lista.length; i++) {
       expect(lista[i].prioridad).toBeGreaterThanOrEqual(lista[i - 1].prioridad)
     }
+  })
+})
+
+describe('los umbrales escalan con el ingreso', () => {
+  /** Ocho cafés de $120: hormiga para quien gana mucho, gasto real para quien no. */
+  const CAFES = Array.from({ length: 8 }, (_, i) =>
+    transaccion({ monto: 12_000, fecha: `2026-08-0${i + 1}` }),
+  )
+
+  it('con ingreso alto, ocho gastos de $120 son hormiga', () => {
+    const ctx = contexto({
+      ajustes: { ...AJUSTES, ingresoMensual: 5_000_000 },
+      transacciones: CAFES,
+    })
+    const r = generarRecomendaciones(ctx, []).find((x) => x.id.startsWith('hormiga-'))
+    expect(r).toBeDefined()
+  })
+
+  it('con ingreso bajo, los mismos gastos ya no son "chicos"', () => {
+    // $120 es el 0.7% de un ingreso de 17,000: pasa el 2%, así que deja de
+    // contar como hormiga y no se agrupa como ruido.
+    const ctx = contexto({
+      ajustes: { ...AJUSTES, ingresoMensual: 400_000 },
+      transacciones: CAFES,
+    })
+    const r = generarRecomendaciones(ctx, []).find((x) => x.id.startsWith('hormiga-'))
+    expect(r).toBeUndefined()
+  })
+
+  it('sin ingreso configurado se aplica el piso, no cero', () => {
+    // Sin referencia, un umbral proporcional sería cero y marcaría todo.
+    const ctx = contexto({ transacciones: CAFES })
+    const lista = generarRecomendaciones(ctx, [])
+    expect(lista.every((r) => !r.id.startsWith('hormiga-'))).toBe(true)
+  })
+
+  it('el excedente relevante crece con el sueldo', () => {
+    const base = {
+      transacciones: [transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 3_000_000, fecha: '2026-08-01' })],
+      metas: [meta({ id: 'm1', aporteMensual: 0, fechaLimite: '2026-12-01' })],
+    }
+    const modesto = generarRecomendaciones(
+      contexto({ ...base, ajustes: { ...AJUSTES, ingresoMensual: 3_000_000 } }),
+      [],
+    )
+    // 3,000,000 libres superan el 5% de 3,000,000: se sugiere destino.
+    expect(modesto.some((r) => r.id === 'excedente-meta')).toBe(true)
   })
 })

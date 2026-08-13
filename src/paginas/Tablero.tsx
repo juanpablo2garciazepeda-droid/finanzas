@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, CalendarClock, CircleQuestionMark as HelpCircle, Plus } from 'lucide-react'
 import { calcularMargen, evaluarGasto } from '@/dominio/alertas'
@@ -21,7 +21,25 @@ import { MedidorSalud } from '@/componentes/MedidorSalud'
 import { FormularioMovimiento } from '@/componentes/FormularioMovimiento'
 import { Boton, Cifra, Insignia, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
-import { GraficaCategorias, GraficaEvolucion, GraficaFlujo } from '@/graficas/Graficas'
+/**
+ * Las gráficas cargan aparte: Recharts es la mitad del peso del arranque y
+ * ninguna de las tres se ve sin desplazarse. Lo primero que se mira —cuánto
+ * puedo gastar hoy— no tiene por qué esperar a que baje una librería de dibujo.
+ */
+const GraficaFlujo = lazy(() =>
+  import('@/graficas/Graficas').then((m) => ({ default: m.GraficaFlujo })),
+)
+const GraficaCategorias = lazy(() =>
+  import('@/graficas/Graficas').then((m) => ({ default: m.GraficaCategorias })),
+)
+const GraficaEvolucion = lazy(() =>
+  import('@/graficas/Graficas').then((m) => ({ default: m.GraficaEvolucion })),
+)
+
+/** Hueco de la altura de la gráfica, para que el resto no brinque al llegar. */
+function EsperaGrafica({ alto = 200 }: { alto?: number }) {
+  return <div className="animate-pulse rounded-campo bg-elevada" style={{ height: alto }} />
+}
 
 export function Tablero() {
   const { ctx, categorias, deudas, metas, pagos, ajustes, hayMovimientos, hayDatos, periodo, cargando } =
@@ -93,18 +111,30 @@ export function Tablero() {
         <Tarjeta>
           {/* Este número es del ciclo, no del mes: la etiqueta tiene que decirlo
               o se lee como si fuera el balance mensual. */}
-          {/* "entraron" solo si entraron de verdad: mostrar una estimación con
-              esa palabra es lo que hace que los números parezcan no cuadrar. */}
-          <Cifra
-            etiqueta={margen.saldo.declarado ? 'Tienes ahora' : `Balance ${delCiclo(margen.ciclo.tipo)}`}
-            valor={dinero(margen.saldo.declarado ? margen.saldo.actual : margen.balance)}
-            tono={margen.balance >= 0 ? 'text-tinta' : 'text-rojo'}
-            detalle={
-              margen.ingresosEstimados
-                ? `${dinero(margen.ingresos)} estimados, aún sin registrar`
-                : `${dinero(margen.ingresosReales)} entraron ${delCiclo(margen.ciclo.tipo)}`
-            }
-          />
+          {/* Con saldo declarado, "cuánto tienes" ya lo dice el panel de arriba;
+              aquí va lo que no está en ningún otro sitio: cuánto se ha ido. */}
+          {margen.saldo.declarado ? (
+            <Cifra
+              etiqueta={`Gastado ${delCiclo(margen.ciclo.tipo)}`}
+              valor={dinero(margen.egresos)}
+              detalle={
+                margen.ingresosReales > 0
+                  ? `${dinero(margen.ingresosReales)} entraron`
+                  : 'Sin ingresos registrados aún'
+              }
+            />
+          ) : (
+            <Cifra
+              etiqueta={`Balance ${delCiclo(margen.ciclo.tipo)}`}
+              valor={dinero(margen.flujoDelCiclo)}
+              tono={margen.flujoDelCiclo >= 0 ? 'text-tinta' : 'text-rojo'}
+              detalle={
+                margen.ingresosEstimados
+                  ? `${dinero(margen.ingresos)} estimados, aún sin registrar`
+                  : `${dinero(margen.ingresosReales)} entraron`
+              }
+            />
+          )}
         </Tarjeta>
         <Tarjeta>
           <Cifra
@@ -191,21 +221,27 @@ export function Tablero() {
       <section>
         <TituloSeccion>Ingresos y egresos</TituloSeccion>
         <Tarjeta>
-          <GraficaFlujo datos={flujo} />
+          <Suspense fallback={<EsperaGrafica />}>
+            <GraficaFlujo datos={flujo} />
+          </Suspense>
         </Tarjeta>
       </section>
 
       <section>
         <TituloSeccion>En qué se fue {nombrePeriodo(periodo)}</TituloSeccion>
         <Tarjeta>
-          <GraficaCategorias datos={rebanadas} />
+          <Suspense fallback={<EsperaGrafica alto={180} />}>
+            <GraficaCategorias datos={rebanadas} />
+          </Suspense>
         </Tarjeta>
       </section>
 
       <section>
         <TituloSeccion>Deuda y ahorro</TituloSeccion>
         <Tarjeta>
-          <GraficaEvolucion datos={evolucion} />
+          <Suspense fallback={<EsperaGrafica />}>
+            <GraficaEvolucion datos={evolucion} />
+          </Suspense>
         </Tarjeta>
       </section>
 

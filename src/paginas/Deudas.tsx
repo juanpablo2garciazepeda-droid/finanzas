@@ -244,23 +244,25 @@ function FichaDeuda({
 
       {/* Los tres números que se quieren de un vistazo: cuánto es cada pago,
           cuántos faltan y cuánto compromete al mes. */}
+      {/* El padding cede en pantallas angostas: con px-3 fijo, la celda queda de
+          61 px y ni la etiqueta ni el monto caben. */}
       <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-campo bg-borde">
-        <div className="bg-elevada px-3 py-2.5">
-          <p className="text-[12px] text-tenue">Cada pago</p>
-          <p className="cifras mt-0.5 text-[15px] font-medium text-tinta">{dinero(deuda.pagoMinimo)}</p>
+        <div className="min-w-0 bg-elevada px-2 py-2.5 sm:px-3">
+          <p className="etiqueta-celda text-tenue">Cada pago</p>
+          <p className="cifras cifra-md mt-0.5 font-medium text-tinta">{dinero(deuda.pagoMinimo)}</p>
         </div>
-        <div className="bg-elevada px-3 py-2.5">
-          <p className="text-[12px] text-tenue">Te faltan</p>
-          <p className="cifras mt-0.5 text-[15px] font-medium text-tinta">
+        <div className="min-w-0 bg-elevada px-2 py-2.5 sm:px-3">
+          <p className="etiqueta-celda text-tenue">Te faltan</p>
+          <p className="cifras cifra-md mt-0.5 font-medium text-tinta">
             {proyeccion.pagosRestantes === null ? '—' : proyeccion.pagosRestantes}
             {proyeccion.pagosRestantes !== null && (
-              <span className="ml-1 font-sans text-[12px] font-normal text-suave">{unidad}</span>
+              <span className="etiqueta-celda ml-1 font-sans font-normal text-suave">{unidad}</span>
             )}
           </p>
         </div>
-        <div className="bg-elevada px-3 py-2.5">
-          <p className="text-[12px] text-tenue">Compromiso</p>
-          <p className="cifras mt-0.5 text-[15px] font-medium text-tinta">
+        <div className="min-w-0 bg-elevada px-2 py-2.5 sm:px-3">
+          <p className="etiqueta-celda text-tenue">Compromiso</p>
+          <p className="cifras cifra-md mt-0.5 font-medium text-tinta">
             {dinero(proyeccion.obligacionMensual)}
           </p>
         </div>

@@ -35,6 +35,18 @@ export interface ContextoFinanciero {
   aportes: AporteMeta[]
 }
 
+/**
+ * Dos magnitudes que no se pueden mezclar, y que antes vivían en un solo campo
+ * `balance` que significaba una u otra según hubiera saldo declarado:
+ *
+ * - **Stock** (`dineroDisponible`, `colchonTotal`): dinero que existe, venga de
+ *   donde venga, incluidos ahorros de meses pasados.
+ * - **Flujo** (`flujoDelCiclo`, `margenLibre`): lo que entró menos lo que salió
+ *   dentro de esta ventana de cobro.
+ *
+ * Todo lo que se reparte entre días sale del flujo. Repartir el stock invitaba
+ * a gastarse los ahorros de meses en los tres días que quedan de la quincena.
+ */
 export interface Margen {
   /** Ventana sobre la que se calculó todo: mes, quincena o semana. */
   ciclo: Ciclo
@@ -43,14 +55,18 @@ export interface Margen {
   /** Lo que de verdad entró y está registrado. Nunca una estimación. */
   ingresosReales: number
   egresos: number
-  /** Ingresos menos egresos del ciclo. */
-  balance: number
+  /** FLUJO: ingresos menos egresos del ciclo. */
+  flujoDelCiclo: number
+  /** STOCK: dinero que hay ahora. `null` si no se declaró saldo. */
+  dineroDisponible: number | null
   /** Pagos de deuda que vencen antes de que cierre el ciclo. */
   compromisoDeuda: number
   /** La parte del aporte a metas que toca a este ciclo. */
   compromisoMeta: number
-  /** Lo que queda de verdad disponible: balance menos compromisos. */
+  /** FLUJO menos compromisos. La base del "¿puedo gastar?". */
   margenLibre: number
+  /** STOCK menos compromisos: el respaldo real. `null` sin saldo declarado. */
+  colchonTotal: number | null
   /** Los ingresos del ciclo aún no aparecen y se estimó con otra fuente. */
   ingresosEstimados: boolean
   /** El dinero real, si la persona declaró su saldo. */
@@ -126,10 +142,16 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
     ctx.aportes,
   )
 
-  // Con saldo declarado el punto de partida es el dinero que hay, no la resta
-  // de flujos del ciclo: saber cuánto tienes gana sobre inferir cuánto entró.
-  const balance = saldo.declarado ? saldo.actual : ingresos - egresos
-  const margenLibre = balance - compromisoDeuda - compromisoMeta
+  // El margen que se reparte entre días sale SIEMPRE del flujo del ciclo. El
+  // saldo declarado no entra aquí: es un stock, y dividir ahorros de meses
+  // entre los días que quedan de la quincena es un mal consejo.
+  const flujoDelCiclo = ingresos - egresos
+  const margenLibre = flujoDelCiclo - compromisoDeuda - compromisoMeta
+
+  // El dinero que existe va por su cuenta, como respaldo y como contexto.
+  const dineroDisponible = saldo.declarado ? saldo.actual : null
+  const colchonTotal = saldo.declarado ? saldo.actual - compromisoDeuda - compromisoMeta : null
+
   const diasRestantes = esMesActual ? ciclo.diasRestantes : 0
 
   return {
@@ -138,10 +160,12 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
     ingresosReales,
     egresos,
     saldo,
-    balance,
+    flujoDelCiclo,
+    dineroDisponible,
     compromisoDeuda,
     compromisoMeta,
     margenLibre,
+    colchonTotal,
     ingresosEstimados: ingresosReales === 0 && estimado > 0,
     diasRestantes,
     gastoDiarioSugerido: diasRestantes > 0 ? Math.max(0, Math.floor(margenLibre / diasRestantes)) : 0,
@@ -248,8 +272,20 @@ export function evaluarGasto(
       texto: `Aún no registras ingresos, así que no puedo medir tu margen ${ventana}.`,
     })
   } else if (margenDespues < 0) {
+    const faltante = -margenDespues
+    // Gastar más de lo que entró teniendo con qué cubrirlo no es lo mismo que
+    // no tener con qué. Lo primero es una decisión; lo segundo, un problema.
+    const loCubreElAhorro = margen.colchonTotal !== null && margen.colchonTotal >= faltante
     const comeDeudas = margenDespues + margen.compromisoMeta < 0
-    if (comeDeudas && margen.compromisoDeuda > 0) {
+    if (loCubreElAhorro) {
+      razones.push({
+        clave: 'margen',
+        nivel: 'ambar',
+        texto: simulacion
+          ? `Con esto gastas ${dinero(faltante, f)} más de lo que entró ${ventana}: saldrían de tu ahorro.`
+          : `Llevas ${dinero(faltante, f)} más de lo que entró ${ventana}; estás tirando de tu ahorro.`,
+      })
+    } else if (comeDeudas && margen.compromisoDeuda > 0) {
       razones.push({
         clave: 'margen',
         nivel: 'rojo',

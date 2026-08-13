@@ -46,7 +46,10 @@ export function PanelDinero({ margen }: { margen: Margen }) {
   }
 
   const comprometido = margen.compromisoDeuda + margen.compromisoMeta
-  const libre = margen.margenLibre
+  // El respaldo es stock: el dinero que hay menos lo ya comprometido. No es lo
+  // mismo que el margen del ciclo, y mezclarlos era el bug que invitaba a
+  // repartir los ahorros entre los días que quedan de la quincena.
+  const respaldo = margen.colchonTotal ?? 0
 
   const filas = [
     {
@@ -62,13 +65,13 @@ export function PanelDinero({ margen }: { margen: Margen }) {
       tono: 'text-suave',
     },
     {
-      etiqueta: 'Te puedes permitir',
-      valor: libre,
+      etiqueta: 'Te queda de respaldo',
+      valor: respaldo,
       detalle:
-        margen.diasRestantes > 0
-          ? `${dinero(margen.gastoDiarioSugerido)} al día hasta que cierre ${esteCiclo(margen.ciclo.tipo)}`
-          : 'Hasta el cierre del periodo',
-      tono: libre > 0 ? 'text-verde' : 'text-rojo',
+        margen.margenLibre >= 0
+          ? `Aparte, ${esteCiclo(margen.ciclo.tipo)} te sobran ${dinero(margen.margenLibre)} de lo que entró`
+          : `Ojo: ${esteCiclo(margen.ciclo.tipo)} vas ${dinero(-margen.margenLibre)} por encima y sale de aquí`,
+      tono: respaldo > 0 ? 'text-verde' : 'text-rojo',
       destacada: true,
     },
   ]

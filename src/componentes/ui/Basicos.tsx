@@ -227,16 +227,18 @@ export function Cifra({
   valor,
   detalle,
   tono = 'text-tinta',
-  tamano = 'text-2xl',
+  tamano = 'cifra-xl',
 }: {
   etiqueta: string
   valor: string
   detalle?: ReactNode
   tono?: string
+  /** Usa las clases fluidas `cifra-xl` / `cifra-lg`: un tamaño fijo desborda la
+   *  celda en pantallas de 320 px. */
   tamano?: string
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-[13px] font-medium text-suave">{etiqueta}</p>
       <p className={clases('cifras mt-1 font-semibold', tamano, tono)}>{valor}</p>
       {detalle && <div className="mt-1 text-xs text-tenue">{detalle}</div>}

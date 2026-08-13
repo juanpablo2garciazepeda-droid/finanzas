@@ -28,8 +28,51 @@ export interface Recomendacion {
 
 /** Cuántas transacciones chicas hacen falta para llamarlo gasto hormiga. */
 const HORMIGA_MINIMO_MOVIMIENTOS = 8
-/** Un movimiento es "chico" si está por debajo de este monto. */
-const HORMIGA_TOPE = 15_000
+
+/**
+ * Los umbrales se miden contra el ingreso, no en pesos fijos.
+ *
+ * Antes estaban clavados: $150 era "gasto chico", $500 "dinero libre relevante",
+ * $1,000 "categoría cara". Para quien cobra 8,500 a la quincena, $150 es un
+ * gasto considerable; para quien cobra 50,000 al mes, es ruido. El mismo
+ * movimiento tenía que clasificarse distinto según quién lo hizo.
+ *
+ * El piso absoluto existe para cuando no hay ingreso configurado ni historial:
+ * sin él, todo umbral sería cero y la app marcaría cada centavo.
+ */
+const PROPORCION = {
+  /** Un movimiento es "chico" por debajo de esta parte del ingreso mensual. */
+  hormiga: 0.02,
+  /** Sobrante que vale la pena redirigir a deuda o meta. */
+  excedente: 0.05,
+  /** Cuándo una categoría pesa lo bastante para simular un recorte. */
+  categoriaCara: 0.1,
+  /** Suscripciones que ya justifican revisarlas. */
+  suscripciones: 0.02,
+  /** Alza mínima del mes anterior que merece mención. */
+  alzaBase: 0.05,
+}
+
+const PISO = {
+  hormiga: 5_000,
+  excedente: 20_000,
+  categoriaCara: 40_000,
+  suscripciones: 8_000,
+  alzaBase: 20_000,
+}
+
+/**
+ * Ingreso mensual de referencia: el configurado, y si no, lo que el ciclo
+ * sugiere. Cero significa que no hay con qué escalar y mandan los pisos.
+ */
+function referenciaMensual(ctx: ContextoFinanciero, ingresosDelCiclo: number, porMes: number): number {
+  if (ctx.ajustes.ingresoMensual > 0) return ctx.ajustes.ingresoMensual
+  return Math.round(ingresosDelCiclo * porMes)
+}
+
+function umbral(clave: keyof typeof PROPORCION, referencia: number): number {
+  return Math.max(PISO[clave], Math.round(referencia * PROPORCION[clave]))
+}
 
 export function generarRecomendaciones(
   ctx: ContextoFinanciero,
@@ -39,6 +82,8 @@ export function generarRecomendaciones(
   const dinero = (c: number) => formatearMoneda(c, f.moneda, f.locale, { conDecimales: false })
   const lista: Recomendacion[] = []
   const margen = calcularMargen(ctx)
+  // Todos los umbrales de este archivo se escalan con esto.
+  const referencia = referenciaMensual(ctx, margen.ingresos, margen.ciclo.porMes)
 
   // Categorías rebasadas varios meses seguidos: el presupuesto está mal puesto
   // o el hábito está mal, y en ambos casos hay que decirlo.
@@ -97,7 +142,7 @@ export function generarRecomendaciones(
   }
 
   // Dinero libre del mes: a la deuda más cara, o a la meta más cercana.
-  if (margen.margenLibre > 50_000) {
+  if (margen.margenLibre > umbral('excedente', referencia)) {
     const objetivo = deudaPrioritaria(ctx.deudas)
     if (objetivo) {
       const proyeccion = proyectarDeuda(objetivo, pagos, ctx.hoy)
@@ -149,7 +194,7 @@ export function generarRecomendaciones(
   const delPeriodo = transaccionesDelPeriodo(ctx.transacciones, ctx.periodo)
   const porCategoria = new Map<string, { conteo: number; total: number }>()
   for (const t of delPeriodo) {
-    if (t.tipo !== 'egreso' || t.monto > HORMIGA_TOPE) continue
+    if (t.tipo !== 'egreso' || t.monto > umbral('hormiga', referencia)) continue
     const previo = porCategoria.get(t.categoriaId) ?? { conteo: 0, total: 0 }
     porCategoria.set(t.categoriaId, { conteo: previo.conteo + 1, total: previo.total + t.monto })
   }
@@ -172,7 +217,7 @@ export function generarRecomendaciones(
   const gastosAnterior = gastoPorCategoria(transaccionesDelPeriodo(ctx.transacciones, anterior))
   for (const [id, actual] of gastosActual) {
     const previo = gastosAnterior.get(id) ?? 0
-    if (previo < 50_000 || actual <= previo * 1.3) continue
+    if (previo < umbral('alzaBase', referencia) || actual <= previo * 1.3) continue
     const nombre = ctx.categorias.find((c) => c.id === id)?.nombre ?? 'una categoría'
     const alza = Math.round(((actual - previo) / previo) * 100)
     lista.push({
@@ -188,7 +233,7 @@ export function generarRecomendaciones(
   // Qué pasaría si recortas la categoría más cara y ese dinero va a la deuda.
   const objetivo = deudaPrioritaria(ctx.deudas)
   const masCara = [...gastosActual.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (objetivo && masCara && masCara[1] > 100_000) {
+  if (objetivo && masCara && masCara[1] > umbral('categoriaCara', referencia)) {
     const recorte = Math.round(masCara[1] * 0.2)
     const proyeccion = proyectarDeuda(objetivo, pagos, ctx.hoy)
     const ahorrados = mesesAhorrados(objetivo, proyeccion.ritmoUsado, recorte)
@@ -206,12 +251,12 @@ export function generarRecomendaciones(
   }
 
   // Ciclo cerrado en negativo.
-  if (margen.balance < 0 && margen.ingresos > 0) {
+  if (margen.flujoDelCiclo < 0 && margen.ingresos > 0) {
     lista.push({
       id: 'balance-negativo',
       tipo: 'presupuesto',
       prioridad: 1,
-      titulo: `Gastaste ${dinero(-margen.balance)} más de lo que entró`,
+      titulo: `Gastaste ${dinero(-margen.flujoDelCiclo)} más de lo que entró`,
       detalle: `Estás sacando de ahorros o de crédito ${esteCiclo(margen.ciclo.tipo)}. Revisa las categorías de arriba primero.`,
       icono: 'TrendingDown',
     })
@@ -219,7 +264,7 @@ export function generarRecomendaciones(
 
   // El ritmo dentro del ciclo: gastar el 70% cuando va el 30% del tiempo es
   // el aviso más accionable que existe, porque todavía se puede corregir.
-  if (margen.ciclo.diasRestantes > 0 && margen.ingresos > 0 && margen.balance >= 0) {
+  if (margen.ciclo.diasRestantes > 0 && margen.ingresos > 0 && margen.flujoDelCiclo >= 0) {
     const diasCorridos = margen.ciclo.diasTotales - margen.ciclo.diasRestantes + 1
     const avanceTiempo = diasCorridos / margen.ciclo.diasTotales
     const avanceGasto = margen.ingresos > 0 ? margen.egresos / margen.ingresos : 0
@@ -240,7 +285,7 @@ export function generarRecomendaciones(
   const suscripciones = ctx.categorias.find((c) => c.nombre.toLowerCase().startsWith('suscripci'))
   if (suscripciones) {
     const alMes = gastosActual.get(suscripciones.id) ?? 0
-    if (alMes > 20_000) {
+    if (alMes > umbral('suscripciones', referencia)) {
       lista.push({
         id: 'suscripciones-anuales',
         tipo: 'habito',

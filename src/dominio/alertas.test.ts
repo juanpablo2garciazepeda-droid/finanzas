@@ -22,7 +22,7 @@ describe('calcularMargen', () => {
     const margen = calcularMargen(ctx)
     expect(margen.ingresos).toBe(2_000_000)
     expect(margen.egresos).toBe(500_000)
-    expect(margen.balance).toBe(1_500_000)
+    expect(margen.flujoDelCiclo).toBe(1_500_000)
     expect(margen.compromisoDeuda).toBe(300_000)
     expect(margen.compromisoMeta).toBe(200_000)
     expect(margen.margenLibre).toBe(1_000_000)
@@ -52,7 +52,7 @@ describe('calcularMargen', () => {
     const margen = calcularMargen(ctx)
     expect(margen.ingresos).toBe(2_500_000)
     expect(margen.ingresosEstimados).toBe(true)
-    expect(margen.balance).toBe(2_400_000)
+    expect(margen.flujoDelCiclo).toBe(2_400_000)
   })
 
   it('el ingreso real del mes gana sobre el sueldo configurado', () => {
@@ -86,7 +86,7 @@ describe('calcularMargen', () => {
     const margen = calcularMargen(ctx)
     expect(margen.ingresosEstimados).toBe(true)
     expect(margen.ingresos).toBe(2_000_000)
-    expect(margen.balance).toBe(1_900_000)
+    expect(margen.flujoDelCiclo).toBe(1_900_000)
   })
 })
 
@@ -290,7 +290,7 @@ describe('evaluarGasto', () => {
 })
 
 describe('el margen con saldo declarado', () => {
-  it('parte del dinero real y no de la resta de flujos', () => {
+  it('separa el dinero acumulado del flujo del ciclo', () => {
     const ctx = contexto({
       ajustes: { ...AJUSTES, saldoInicial: 850_000, saldoInicialFecha: '2026-08-01' },
       transacciones: [transaccion({ monto: 100_000, fecha: '2026-08-05' })],
@@ -299,8 +299,13 @@ describe('el margen con saldo declarado', () => {
     const margen = calcularMargen(ctx)
     expect(margen.saldo.declarado).toBe(true)
     expect(margen.saldo.actual).toBe(750_000)
-    // 750,000 de saldo real − 200,000 comprometidos a deuda.
-    expect(margen.margenLibre).toBe(550_000)
+    expect(margen.dineroDisponible).toBe(750_000)
+    // El colchón mira el dinero que existe: 750,000 − 200,000 de deuda.
+    expect(margen.colchonTotal).toBe(550_000)
+    // El margen del ciclo mira lo que entró y salió: no cayó nómina y salieron
+    // 100,000, así que este ciclo va en negativo aunque haya ahorros.
+    expect(margen.flujoDelCiclo).toBe(-100_000)
+    expect(margen.margenLibre).toBe(-300_000)
   })
 
   it('sin saldo declarado sigue razonando con los flujos del periodo', () => {
@@ -312,6 +317,9 @@ describe('el margen con saldo declarado', () => {
     })
     const margen = calcularMargen(ctx)
     expect(margen.saldo.declarado).toBe(false)
+    expect(margen.dineroDisponible).toBeNull()
+    expect(margen.colchonTotal).toBeNull()
+    expect(margen.flujoDelCiclo).toBe(800_000)
     expect(margen.margenLibre).toBe(800_000)
   })
 
@@ -324,5 +332,77 @@ describe('el margen con saldo declarado', () => {
       contexto({ ...base, pagos: [pago({ monto: 120_000, fecha: '2026-08-04' })] }),
     )
     expect(sinPago.saldo.actual - conPago.saldo.actual).toBe(120_000)
+  })
+})
+
+describe('el gasto diario nunca reparte los ahorros', () => {
+  /**
+   * El bug que originó esta separación: con el saldo acumulado como base, la
+   * app invitaba a repartir el ahorro de meses entre los días que quedan del
+   * ciclo. Lo que se puede gastar al día sale de lo que entra, no de lo que se
+   * juntó.
+   */
+  it('un ahorro grande no infla lo que se puede gastar hoy', () => {
+    const ctx = contexto({
+      hoy: '2026-08-29',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        saldoInicial: 4_000_000,
+        saldoInicialFecha: '2026-08-16',
+      },
+      transacciones: [
+        transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 850_000, fecha: '2026-08-16' }),
+      ],
+    })
+    const margen = calcularMargen(ctx)
+    expect(margen.dineroDisponible).toBe(4_850_000)
+    expect(margen.flujoDelCiclo).toBe(850_000)
+    // Quedan del 29 al 31: tres días. 850,000 / 3, nunca 4,850,000 / 3.
+    expect(margen.diasRestantes).toBe(3)
+    expect(margen.gastoDiarioSugerido).toBe(283_333)
+  })
+
+  it('con flujo negativo no sugiere gastar nada, aunque haya colchón', () => {
+    const ctx = contexto({
+      ajustes: { ...AJUSTES, saldoInicial: 4_000_000, saldoInicialFecha: '2026-08-01' },
+      transacciones: [transaccion({ monto: 50_000, fecha: '2026-08-05' })],
+    })
+    const margen = calcularMargen(ctx)
+    expect(margen.margenLibre).toBeLessThan(0)
+    expect(margen.colchonTotal).toBeGreaterThan(0)
+    expect(margen.gastoDiarioSugerido).toBe(0)
+  })
+
+  it('un periodo ya cerrado no divide entre cero', () => {
+    const margen = calcularMargen(contexto({ periodo: '2026-07' }))
+    expect(margen.diasRestantes).toBe(0)
+    expect(margen.gastoDiarioSugerido).toBe(0)
+  })
+})
+
+describe('el veredicto distingue quedarse corto de tirar del ahorro', () => {
+  it('con colchón que cubre el bajón, avisa en ámbar en vez de rojo', () => {
+    const ctx = contexto({
+      ajustes: { ...AJUSTES, saldoInicial: 4_000_000, saldoInicialFecha: '2026-08-01' },
+      transacciones: [
+        transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 800_000, fecha: '2026-08-01' }),
+        transaccion({ monto: 850_000, fecha: '2026-08-05' }),
+      ],
+    })
+    const veredicto = evaluarGasto(0, null, ctx)
+    expect(veredicto.nivel).toBe('ambar')
+    expect(veredicto.razones.find((r) => r.clave === 'margen')?.texto).toContain('ahorro')
+  })
+
+  it('sin colchón, el mismo bajón sí es rojo', () => {
+    const ctx = contexto({
+      transacciones: [
+        transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 800_000, fecha: '2026-08-01' }),
+        transaccion({ monto: 850_000, fecha: '2026-08-05' }),
+      ],
+    })
+    const veredicto = evaluarGasto(0, null, ctx)
+    expect(veredicto.nivel).toBe('rojo')
   })
 })

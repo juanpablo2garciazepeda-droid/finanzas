@@ -47,7 +47,7 @@ export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[
     body: [
       ['Ingresos', dinero(margen.ingresos)],
       ['Egresos', dinero(margen.egresos)],
-      ['Balance', dinero(margen.balance)],
+      ['Balance', dinero(margen.flujoDelCiclo)],
       ['Compromiso de deuda', dinero(margen.compromisoDeuda)],
       ['Aporte pendiente a metas', dinero(margen.compromisoMeta)],
       ['Margen libre', dinero(margen.margenLibre)],

@@ -119,7 +119,8 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         deudas.length > 0 ||
         metas.length > 0 ||
         presupuestos.length > 0 ||
-        ajustes.ingresoMensual > 0,
+        ajustes.ingresoMensual > 0 ||
+        ajustes.saldoInicial > 0,
     }
   }, [datos, listo, periodo, hoy])
 

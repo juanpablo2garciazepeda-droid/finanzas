@@ -42,13 +42,66 @@ export function quitarPin(): void {
   localStorage.removeItem(CLAVE_HASH)
   localStorage.removeItem(CLAVE_SAL)
   sessionStorage.removeItem(CLAVE_SESION)
+  limpiarIntentos()
 }
 
+/**
+ * Falla cerrado. Antes devolvía `true` cuando no encontraba con qué comparar,
+ * así que bastaba con borrar la llave desde las herramientas del navegador —o
+ * que el almacenamiento se corrompiera— para que cualquier PIN abriera.
+ *
+ * Si no hay PIN configurado, quien decide es `hayPin()`: esta función solo
+ * valida, y sin material contra el cual validar la respuesta es que no.
+ */
 export async function pinCorrecto(pin: string): Promise<boolean> {
   const guardado = localStorage.getItem(CLAVE_HASH)
   const sal = localStorage.getItem(CLAVE_SAL)
-  if (!guardado || !sal) return true
+  if (!guardado || !sal) return false
   return (await resumen(pin, sal)) === guardado
+}
+
+const CLAVE_INTENTOS = 'finanzas.bloqueo.intentos'
+const CLAVE_ESPERA = 'finanzas.bloqueo.espera'
+/** Fallos tolerados antes de imponer una espera. */
+const INTENTOS_LIBRES = 5
+/** La primera espera; se duplica en cada tanda fallida. */
+const ESPERA_BASE_SEGUNDOS = 30
+
+interface Penalizacion {
+  /** Segundos que faltan para poder volver a intentar. Cero si se puede ya. */
+  esperaRestante: number
+  intentosFallidos: number
+}
+
+export function estadoIntentos(): Penalizacion {
+  const intentosFallidos = Number(localStorage.getItem(CLAVE_INTENTOS) ?? 0)
+  const hasta = Number(localStorage.getItem(CLAVE_ESPERA) ?? 0)
+  return {
+    intentosFallidos,
+    esperaRestante: Math.max(0, Math.ceil((hasta - Date.now()) / 1000)),
+  }
+}
+
+/**
+ * Registra un intento fallido y devuelve el estado resultante. La cuenta vive
+ * en `localStorage` a propósito: en `sessionStorage` bastaría con recargar la
+ * página para reiniciar el contador y la espera no serviría de nada.
+ */
+export function registrarFallo(): Penalizacion {
+  const intentosFallidos = Number(localStorage.getItem(CLAVE_INTENTOS) ?? 0) + 1
+  localStorage.setItem(CLAVE_INTENTOS, String(intentosFallidos))
+
+  if (intentosFallidos >= INTENTOS_LIBRES) {
+    const tandas = Math.floor(intentosFallidos / INTENTOS_LIBRES) - 1
+    const segundos = ESPERA_BASE_SEGUNDOS * 2 ** tandas
+    localStorage.setItem(CLAVE_ESPERA, String(Date.now() + segundos * 1000))
+  }
+  return estadoIntentos()
+}
+
+export function limpiarIntentos(): void {
+  localStorage.removeItem(CLAVE_INTENTOS)
+  localStorage.removeItem(CLAVE_ESPERA)
 }
 
 /** La sesión vive en `sessionStorage`: al cerrar la pestaña vuelve a pedirlo. */

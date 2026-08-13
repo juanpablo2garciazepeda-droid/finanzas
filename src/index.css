@@ -286,6 +286,33 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /*
+   * Montos que se encogen antes que desbordar su columna.
+   *
+   * Con tamaño fijo, "$129,400" pide 108 px dentro de una celda de 106, y en un
+   * grid de tres a 320 px "$11,000" pide 70 dentro de 56: el número se sale de
+   * la tarjeta. Pasa en iPhone con el Zoom de pantalla activado, que reporta
+   * 320 px lógicos aunque el aparato sea de 390.
+   *
+   * El tope de arriba es el tamaño de diseño; el de abajo, el mínimo legible.
+   * Entre ambos escala con el ancho, sin escalones que dejen anchos intermedios
+   * rotos.
+   */
+  .cifra-xl {
+    font-size: clamp(1.125rem, 6.2vw, 1.5rem);
+  }
+  .cifra-lg {
+    font-size: clamp(0.9375rem, 4.4vw, 1.125rem);
+  }
+  .cifra-md {
+    font-size: clamp(0.8125rem, 3.9vw, 0.9375rem);
+  }
+  /* Etiquetas de celda en rejillas de tres columnas: "Compromiso" no cabe a
+     12 px cuando la celda mide 61. */
+  .etiqueta-celda {
+    font-size: clamp(0.6875rem, 3.4vw, 0.75rem);
+  }
+
   /* Barra translúcida con saturación, exactamente como la nav de Apple. */
   .cristal {
     background-color: color-mix(in srgb, var(--color-superficie) 72%, transparent);

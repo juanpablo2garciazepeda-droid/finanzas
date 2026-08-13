@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Delete, LockKeyhole } from 'lucide-react'
-import { abrirSesion, pinCorrecto } from '@/estado/bloqueo'
+import {
+  abrirSesion,
+  estadoIntentos,
+  limpiarIntentos,
+  pinCorrecto,
+  registrarFallo,
+} from '@/estado/bloqueo'
 import { Boton, clases } from './ui/Basicos'
 
 const LARGO = 4
@@ -14,30 +20,42 @@ export function PantallaBloqueo({ onEntrar }: { onEntrar: () => void }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
   const [comprobando, setComprobando] = useState(false)
+  const [espera, setEspera] = useState(() => estadoIntentos().esperaRestante)
   const campo = useRef<HTMLInputElement>(null)
+  const bloqueado = espera > 0
 
   useEffect(() => {
     campo.current?.focus()
   }, [])
 
+  // La cuenta atrás corre sola; sin esto el usuario no sabría cuánto falta.
   useEffect(() => {
-    if (pin.length !== LARGO || comprobando) return
+    if (!bloqueado) return
+    const id = setInterval(() => setEspera(estadoIntentos().esperaRestante), 1000)
+    return () => clearInterval(id)
+  }, [bloqueado])
+
+  useEffect(() => {
+    if (pin.length !== LARGO || comprobando || bloqueado) return
     setComprobando(true)
     void pinCorrecto(pin).then((correcto) => {
       if (correcto) {
+        limpiarIntentos()
         abrirSesion()
         onEntrar()
         return
       }
+      setEspera(registrarFallo().esperaRestante)
       setError(true)
       setPin('')
       setComprobando(false)
       // Se limpia el aviso para que el siguiente intento no arrastre el rojo.
       setTimeout(() => setError(false), 1600)
     })
-  }, [pin, comprobando, onEntrar])
+  }, [pin, comprobando, bloqueado, onEntrar])
 
   function teclear(tecla: string) {
+    if (bloqueado) return
     if (tecla === 'borrar') {
       setPin((p) => p.slice(0, -1))
       return
@@ -53,8 +71,15 @@ export function PantallaBloqueo({ onEntrar }: { onEntrar: () => void }) {
           <LockKeyhole className="size-7 text-sobre-acento" strokeWidth={1.75} aria-hidden />
         </span>
         <h1 className="font-display text-[24px] font-semibold text-tinta">Juanpa Finanzas</h1>
-        <p className={clases('text-[15px]', error ? 'text-rojo' : 'text-suave')} role="status">
-          {error ? 'Ese no es tu PIN. Inténtalo otra vez.' : 'Escribe tu PIN para entrar'}
+        <p
+          className={clases('text-[15px]', error || bloqueado ? 'text-rojo' : 'text-suave')}
+          role="status"
+        >
+          {bloqueado
+            ? `Demasiados intentos. Espera ${espera} ${espera === 1 ? 'segundo' : 'segundos'}.`
+            : error
+              ? 'Ese no es tu PIN. Inténtalo otra vez.'
+              : 'Escribe tu PIN para entrar'}
         </p>
       </div>
 
@@ -62,10 +87,11 @@ export function PantallaBloqueo({ onEntrar }: { onEntrar: () => void }) {
       <input
         ref={campo}
         value={pin}
-        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, LARGO))}
+        onChange={(e) => !bloqueado && setPin(e.target.value.replace(/\D/g, '').slice(0, LARGO))}
         inputMode="numeric"
         autoComplete="off"
         aria-label="PIN"
+        disabled={bloqueado}
         className="sr-only"
       />
 
@@ -81,7 +107,12 @@ export function PantallaBloqueo({ onEntrar }: { onEntrar: () => void }) {
         ))}
       </div>
 
-      <div className="grid w-full max-w-[17rem] grid-cols-3 gap-3">
+      <div
+        className={clases(
+          'grid w-full max-w-[17rem] grid-cols-3 gap-3 transition-opacity',
+          bloqueado && 'pointer-events-none opacity-40',
+        )}
+      >
         {TECLAS.map((tecla, i) =>
           tecla === '' ? (
             <span key={`hueco-${i}`} />
@@ -90,6 +121,7 @@ export function PantallaBloqueo({ onEntrar }: { onEntrar: () => void }) {
               key={tecla}
               type="button"
               onClick={() => teclear(tecla)}
+              disabled={bloqueado}
               aria-label={tecla === 'borrar' ? 'Borrar' : tecla}
               className={clases(
                 'cifras flex aspect-square items-center justify-center rounded-full text-[24px] font-medium transition-colors',

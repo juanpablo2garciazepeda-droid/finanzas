@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useRef, useState, type ReactNode } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { motion, useReducedMotion } from 'motion/react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -97,26 +98,106 @@ function BarraLateral() {
   )
 }
 
+/**
+ * Barra inferior con un indicador que viaja entre secciones.
+ *
+ * Antes el estado activo solo cambiaba de color, así que cambiar de sección se
+ * sentía como un salto seco. Aquí una píldora se desliza con un resorte, el
+ * icono responde al tocar (no al soltar) y se puede arrastrar el dedo por la
+ * barra para recorrer las secciones antes de decidir.
+ *
+ * El resorte es lo que da la sensación física: `layoutId` hace que motion anime
+ * la píldora entre posiciones, y `stiffness`/`damping` le dan masa sin rebote
+ * de juguete.
+ */
 function NavegacionMovil() {
+  const navegar = useNavigate()
+  const { pathname } = useLocation()
+  const barra = useRef<HTMLDivElement>(null)
+  const [arrastrando, setArrastrando] = useState(false)
+  const [rutaPrevia, setRutaPrevia] = useState<string | null>(null)
+  const reducido = useReducedMotion()
+
+  const activa = SECCIONES.some((s) => s.ruta === pathname) ? pathname : '/'
+  // Durante el arrastre manda el dedo; al soltar, la ruta real.
+  const resaltada = arrastrando && rutaPrevia ? rutaPrevia : activa
+
+  /** Qué sección cae bajo esta coordenada horizontal. */
+  const seccionEn = (x: number): string | null => {
+    const caja = barra.current?.getBoundingClientRect()
+    if (!caja || x < caja.left || x > caja.right) return null
+    const indice = Math.floor(((x - caja.left) / caja.width) * SECCIONES.length)
+    return SECCIONES[Math.min(SECCIONES.length - 1, Math.max(0, indice))].ruta
+  }
+
+  const alMover = (x: number) => {
+    const ruta = seccionEn(x)
+    if (!ruta || ruta === rutaPrevia) return
+    setRutaPrevia(ruta)
+    // Un golpecito al cruzar de sección. En iOS no existe y no falla.
+    navigator.vibrate?.(8)
+  }
+
   return (
     <nav className="area-segura-inferior fixed inset-x-0 bottom-0 z-30 border-t border-borde cristal lg:hidden">
-      <div className="mx-auto flex max-w-md">
-        {SECCIONES.map(({ ruta, etiqueta, Icono }) => (
-          <NavLink
-            key={ruta}
-            to={ruta}
-            end={ruta === '/'}
-            className={({ isActive }) =>
-              clases(
-                'flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors',
-                isActive ? 'text-acento' : 'text-tenue',
-              )
-            }
-          >
-            <Icono className="size-[22px]" strokeWidth={1.75} aria-hidden />
-            <span className="max-w-full truncate px-0.5">{etiqueta}</span>
-          </NavLink>
-        ))}
+      <div
+        ref={barra}
+        className="mx-auto flex max-w-md touch-none"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId)
+          setArrastrando(true)
+          alMover(e.clientX)
+        }}
+        onPointerMove={(e) => arrastrando && alMover(e.clientX)}
+        onPointerUp={() => {
+          if (rutaPrevia && rutaPrevia !== activa) navegar(rutaPrevia)
+          setArrastrando(false)
+          setRutaPrevia(null)
+        }}
+        onPointerCancel={() => {
+          setArrastrando(false)
+          setRutaPrevia(null)
+        }}
+      >
+        {SECCIONES.map(({ ruta, etiqueta, Icono }) => {
+          const esActiva = resaltada === ruta
+          return (
+            <button
+              key={ruta}
+              type="button"
+              onClick={() => navegar(ruta)}
+              aria-current={activa === ruta ? 'page' : undefined}
+              // 44 px de alto mínimo: el área táctil no depende del icono.
+              className={clases(
+                'relative flex min-h-11 flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium',
+                esActiva ? 'text-acento' : 'text-tenue',
+              )}
+            >
+              {esActiva && (
+                <motion.span
+                  layoutId="indicador-nav"
+                  className="absolute inset-x-1.5 inset-y-1 -z-10 rounded-2xl bg-acento-suave"
+                  transition={
+                    reducido
+                      ? { duration: 0 }
+                      : { type: 'spring', stiffness: 400, damping: 32 }
+                  }
+                />
+              )}
+              <motion.span
+                className="flex flex-col items-center gap-1"
+                whileTap={reducido ? undefined : { scale: 0.92 }}
+                animate={{ scale: arrastrando && esActiva ? 1.08 : 1 }}
+                transition={
+                  reducido ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 30 }
+                }
+              >
+                <Icono className="size-[22px]" strokeWidth={1.75} aria-hidden />
+                <span className="max-w-full truncate px-0.5">{etiqueta}</span>
+              </motion.span>
+            </button>
+          )
+        })}
       </div>
     </nav>
   )

@@ -10,7 +10,7 @@ Todo vive en el navegador. No hay servidor, no hay cuenta, no sale un solo dato 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # 129 pruebas del dominio
+npm test         # 137 pruebas del dominio
 npm run build    # bundle de producción en dist/
 ```
 
@@ -47,16 +47,17 @@ src/
     fechas.ts         Periodos YYYY-MM y fechas YYYY-MM-DD en hora local
     categorias.ts     Orden del selector por frecuencia de uso
     ciclos.ts         Ventana de cobro: mes, quincena o semana
+    saldo.ts          Cuánto dinero hay de verdad, ahora
     presupuestos.ts   Gasto contra límite, comparativa mes a mes
     deudas.ts         Amortización, vencimientos, método avalancha
     metas.ts          Proyección de llegada y aporte necesario
     alertas.ts        El semáforo y el cálculo del margen  ← el corazón
     salud.ts          Puntaje 0-100 y series históricas
     recomendaciones.ts  Reglas que producen consejos accionables
-    *.test.ts         129 pruebas sobre todo lo anterior
+    *.test.ts         137 pruebas sobre todo lo anterior
 
   datos/          Persistencia. El único lugar que toca IndexedDB.
-    db.ts             Esquema Dexie (v4)
+    db.ts             Esquema Dexie (v5)
     repositorio.ts    Todas las escrituras; recalcula saldos derivados
     demo.ts           Datos de ejemplo
     categoriasIniciales.ts
@@ -119,6 +120,13 @@ hasta el día 15; decirle cuánto le sobra "en el mes" no le sirve en la caja de
 configura en Ajustes y el semáforo entero se recalcula sobre esa ventana. Los presupuestos, las
 gráficas y el puntaje de salud siguen siendo mensuales a propósito: ahí la pregunta es "¿cómo me
 fue?", no "¿puedo gastar?".
+
+**La app no puede adivinar cuánto tienes en el banco.** Nadie registra su vida financiera desde el
+día cero, así que el saldo se declara una vez —"hoy tengo esto"— y a partir de esa foto se suman
+los ingresos y se restan gastos, abonos a deudas y aportes a metas. Con saldo declarado el margen
+parte del dinero real; sin él solo se puede razonar sobre flujos, que es útil pero no responde a
+"¿cuánto tengo?". Los aportes a metas salen del saldo a propósito: ese dinero se apartó y dejó de
+ser gastable.
 
 **El dinero estimado nunca se muestra como dinero real.** Mientras no haya un ingreso registrado
 en el ciclo, el margen se calcula con una estimación del sueldo: eso mantiene la app útil el día 1.

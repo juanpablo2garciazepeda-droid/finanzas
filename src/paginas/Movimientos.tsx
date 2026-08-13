@@ -81,18 +81,21 @@ export function Movimientos() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <Tarjeta className="py-3">
-          <Cifra etiqueta="Ingresos" valor={dinero(ingresos)} tamano="text-lg" />
+      {/* Tres montos en fila: a 320 px el padding de tarjeta por omisión deja
+          56 px de contenido y un monto de cinco dígitos no cabe. Aquí el
+          espaciado cede y vuelve a lo normal en cuanto hay ancho. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Tarjeta className="px-2.5 py-3 sm:px-4">
+          <Cifra etiqueta="Ingresos" valor={dinero(ingresos)} tamano="cifra-lg" />
         </Tarjeta>
-        <Tarjeta className="py-3">
-          <Cifra etiqueta="Egresos" valor={dinero(egresos)} tamano="text-lg" />
+        <Tarjeta className="px-2.5 py-3 sm:px-4">
+          <Cifra etiqueta="Egresos" valor={dinero(egresos)} tamano="cifra-lg" />
         </Tarjeta>
-        <Tarjeta className="py-3">
+        <Tarjeta className="px-2.5 py-3 sm:px-4">
           <Cifra
             etiqueta="Neto"
             valor={dinero(ingresos - egresos)}
-            tamano="text-lg"
+            tamano="cifra-lg"
             tono={ingresos - egresos >= 0 ? 'text-verde' : 'text-rojo'}
           />
         </Tarjeta>
