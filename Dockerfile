@@ -1,11 +1,17 @@
 # syntax=docker/dockerfile:1.7
-# ---- Build stage: Node 22, install deps, run `vite build` ----
+# ---- Build stage: Node 22, pnpm install, run `vite build` ----
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
+# Corepack ships with Node 22 and lets us pin the pnpm version declared in
+# package.json#packageManager without installing it globally.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
 # Cache deps separately so source changes don't bust the install layer.
-COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+# Use *.yaml glob so we still match a future pnpm-lock rename.
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
+RUN pnpm install --frozen-lockfile
 
 # Source.
 COPY tsconfig*.json vite.config.ts index.html .oxlintrc.json ./
@@ -13,7 +19,7 @@ COPY public ./public
 COPY src ./src
 
 # Production bundle.
-RUN npm run build
+RUN pnpm run build
 
 # ---- Runtime stage: nginx serving /usr/share/nginx/html ----
 FROM nginx:1.27-alpine
