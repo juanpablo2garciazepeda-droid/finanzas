@@ -19,28 +19,31 @@ RUN npm run build
 FROM nginx:1.27-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# SPA fallback so React Router URLs don't 404 on direct nav/refresh.
-# We use a tiny nginx.conf instead of the stock one because the default
-# only tries files, not the SPA shell.
-RUN sed -i 's|^http {|http {\n    include /etc/nginx/spa.conf;|' /etc/nginx/nginx.conf \
- && printf '%s\n' \
-      'server {' \
-      '    listen 80;' \
-      '    server_name _;' \
-      '    root /usr/share/nginx/html;' \
-      '    index index.html;' \
-      '    location / {' \
-      '        try_files $uri $uri/ /index.html;' \
-      '    }' \
-      '    location ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|webp|ico|json)$ {' \
-      '        expires 30d;' \
-      '        add_header Cache-Control "public, max-age=2592000, immutable";' \
-      '        try_files $uri =404;' \
-      '    }' \
-      '    gzip on;' \
-      '    gzip_types text/css application/javascript application/json image/svg+xml;' \
-      '    gzip_min_length 1024;' \
-      '}' > /etc/nginx/conf.d/default.conf
+# SPA-friendly default vhost: try the file, then fall back to /index.html so
+# React Router URLs (e.g. /presupuestos) don't 404 on direct nav/refresh.
+# gzip + immutable caching for the hashed asset bundle.
+RUN cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|webp|ico|json|webmanifest)$ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+        try_files $uri =404;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml application/manifest+json;
+    gzip_min_length 1024;
+}
+NGINX
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
