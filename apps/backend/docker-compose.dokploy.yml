@@ -1,0 +1,37 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: juanpa-finanzas-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_HOST: ${DATABASE_HOST:?DATABASE_HOST is required}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:?DATABASE_USER is required}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+      DATABASE_NAME: ${DATABASE_NAME:-finanzas}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://finanzasgz.com.mx}
+    networks:
+      - dokploy-network
+      - default
+    labels:
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.juanpa-finanzas-api.rule=Host(`api.finanzasgz.com.mx`)
+      - traefik.http.routers.juanpa-finanzas-api.entrypoints=web
+      - traefik.http.routers.juanpa-finanzas-api.service=juanpa-finanzas-api-svc
+      - traefik.http.routers.juanpa-finanzas-api.middlewares=redirect-to-https@file
+      - traefik.http.services.juanpa-finanzas-api-svc.loadbalancer.server.port=3000
+      - traefik.http.routers.juanpa-finanzas-apisecure.rule=Host(`api.finanzasgz.com.mx`)
+      - traefik.http.routers.juanpa-finanzas-apisecure.entrypoints=websecure
+      - traefik.http.routers.juanpa-finanzas-apisecure.service=juanpa-finanzas-apisecure-svc
+      - traefik.http.routers.juanpa-finanzas-apisecure.tls.certresolver=letsencrypt
+      - traefik.http.services.juanpa-finanzas-apisecure-svc.loadbalancer.server.port=3000
+      - traefik.enable=true
+networks:
+  dokploy-network:
+    external: true
