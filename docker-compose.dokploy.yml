@@ -12,13 +12,14 @@ services:
       - traefik.docker.network=dokploy-network
       - traefik.http.routers.juanpa-finanzas-web.rule=Host(`finanzas.hotelcaracolescolima.com.mx`)
       - traefik.http.routers.juanpa-finanzas-web.entrypoints=web
-      - traefik.http.services.juanpa-finanzas-web.loadbalancer.server.port=80
+      - traefik.http.routers.juanpa-finanzas-web.service=juanpa-finanzas-web-svc
       - traefik.http.routers.juanpa-finanzas-web.middlewares=redirect-to-https@file
+      - traefik.http.services.juanpa-finanzas-web-svc.loadbalancer.server.port=80
       - traefik.http.routers.juanpa-finanzas-websecure.rule=Host(`finanzas.hotelcaracolescolima.com.mx`)
       - traefik.http.routers.juanpa-finanzas-websecure.entrypoints=websecure
-      - traefik.http.services.juanpa-finanzas-websecure.loadbalancer.server.port=80
-      - traefik.http.routers.juanpa-finanzas-websecure.service=juanpa-finanzas-websecure
+      - traefik.http.routers.juanpa-finanzas-websecure.service=juanpa-finanzas-websecure-svc
       - traefik.http.routers.juanpa-finanzas-websecure.tls.certresolver=letsencrypt
+      - traefik.http.services.juanpa-finanzas-websecure-svc.loadbalancer.server.port=80
       - traefik.enable=true
 networks:
   dokploy-network:
