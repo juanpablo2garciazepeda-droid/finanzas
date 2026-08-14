@@ -14,7 +14,7 @@ interface Paso {
 
 const PASOS: Paso[] = [
   {
-    titulo: 'Bienvenido a Juanpa Finanzas',
+    titulo: 'Bienvenido a Finanzas GZ',
     detalle:
       'Esta app te dice cuánto puedes gastar HOY sin romper nada, considerando tus deudas, tus metas y tu próximo cobro.',
     icono: <Sparkles className="size-6 text-acento" aria-hidden />,
@@ -63,9 +63,13 @@ export function Onboarding() {
     navigate('/')
   }
 
+  // Sin `min-h-dvh`: esta pantalla se dibuja DENTRO de `Disposicion`, que ya
+  // aporta encabezado, barra inferior y su propio alto. Pedir la altura de la
+  // ventana otra vez empujaba la tarjeta al centro de una zona que empieza
+  // debajo del encabezado, y dejaba media pantalla en blanco arriba.
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-fondo px-4 py-8">
-      <Tarjeta className="w-full max-w-md">
+    <div className="mx-auto w-full max-w-md py-4">
+      <Tarjeta className="w-full">
         <div className="mb-4 flex items-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-[12px] bg-acento-suave">
             {paso.icono}

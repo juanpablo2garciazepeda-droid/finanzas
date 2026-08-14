@@ -140,7 +140,6 @@ export class RecurrentesService extends AuthCrudService<GastoRecurrente> {
       if (r.iniciaEn > hoy) continue
       if (r.terminaEn && hoy > r.terminaEn) continue
 
-      const [yyyy, mm] = hoy.split('-').map(Number)
       const fechaToca = `${hoy.slice(0, 7)}-${String(r.diaDelMes).padStart(2, '0')}`
       if (fechaToca > hoy) continue // aún no llega el día
       if (r.ultimoGeneradoEn && r.ultimoGeneradoEn >= fechaToca) continue

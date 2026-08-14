@@ -1,7 +1,7 @@
 {
-  "name": "Juanpa Finanzas",
-  "short_name": "Juanpa Finanzas",
-  "description": "Control de gastos, deudas y metas de ahorro. Tus datos se quedan en este dispositivo.",
+  "name": "Finanzas GZ",
+  "short_name": "Finanzas GZ",
+  "description": "Cuánto puedes gastar hoy sin romper nada, contando deudas, metas y tu próximo cobro.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

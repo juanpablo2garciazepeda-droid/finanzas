@@ -1,21 +1,5 @@
-import {
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  Body,
-} from '@nestjs/common';
-import { CurrentUser } from './current-user.decorator';
-import { JwtPayload } from '../auth/auth.service';
-import {
-  DeepPartial,
-  FindOptionsWhere,
-  Repository,
-} from 'typeorm';
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { DeepPartial, FindOptionsWhere, Repository } from 'typeorm';
 
 /**
  * Generic CRUD service for any entity owned by a single user.
@@ -36,10 +20,23 @@ export abstract class AuthCrudService<Entity extends { userId: string }> {
     });
   }
 
-  findOne(userId: string, id: string): Promise<Entity | null> {
-    return this.repo.findOne({
+  /**
+   * Devuelve la fila o lanza 404.
+   *
+   * El filtro por `userId` hace que "no existe" y "es de otra persona" sean el
+   * mismo caso, que es justo lo que se quiere: un 403 en el segundo confirmaría
+   * que ese id existe y de paso permitiría enumerar los registros ajenos.
+   *
+   * Antes devolvía `null` y el controlador lo serializaba como un 200 con el
+   * cuerpo vacío: no filtraba datos, pero le decía al cliente "aquí está" de
+   * algo que no está.
+   */
+  async findOne(userId: string, id: string): Promise<Entity> {
+    const fila = await this.repo.findOne({
       where: { id, userId } as unknown as FindOptionsWhere<Entity>,
     });
+    if (!fila) throw new NotFoundException('No encontrado.');
+    return fila;
   }
 
   create(userId: string, input: DeepPartial<Entity>): Promise<Entity> {
@@ -53,10 +50,8 @@ export abstract class AuthCrudService<Entity extends { userId: string }> {
     id: string,
     input: DeepPartial<Entity>,
   ): Promise<Entity> {
+    // `findOne` ya lanza 404 si no es suya o no existe.
     const existing = await this.findOne(userId, id);
-    if (!existing) {
-      throw new Error('not found');
-    }
     // Strip userId from the patch so callers can't re-parent a record.
     const { userId: _ignored, ...rest } = input as { userId?: string };
     Object.assign(existing, rest);
@@ -68,8 +63,10 @@ export abstract class AuthCrudService<Entity extends { userId: string }> {
       id,
       userId,
     } as unknown as FindOptionsWhere<Entity>);
+    // `new Error` salía como 500 con "Internal server error": un id ajeno o
+    // inexistente no es una falla del servidor, es un 404.
     if (!result.affected) {
-      throw new Error('not found');
+      throw new NotFoundException('No encontrado.');
     }
   }
 }

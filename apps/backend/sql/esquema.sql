@@ -1,4 +1,4 @@
--- Juanpa Finanzas — esquema del backend NestJS.
+-- Finanzas GZ — esquema del backend NestJS.
 --
 -- Adaptación del esquema original de Supabase (ver infra/supabase/esquema.sql)
 -- para correr en un Postgres "pelón" administrado por la propia API:

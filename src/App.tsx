@@ -1,13 +1,17 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { ProveedorAuth, useAuth } from '@/estado/auth'
 import { ProveedorI18n } from '@/estado/i18n'
+import { Landing } from '@/paginas/Landing'
 import { Login } from '@/paginas/Login'
+import { CrearCuenta } from '@/paginas/CrearCuenta'
 import { VerificarEmail } from '@/paginas/VerificarEmail'
 import { OlvidePassword } from '@/paginas/OlvidePassword'
 import { RestablecerPassword } from '@/paginas/RestablecerPassword'
 import { AvisoPrivacidad } from '@/paginas/AvisoPrivacidad'
 import { ProveedorAvisos } from '@/estado/avisos'
 import { ProveedorFinanzas } from '@/estado/finanzas'
+import { LimiteDeError } from '@/componentes/LimiteDeError'
+import { MarcaGZ } from '@/componentes/Marca'
 import { useRecordatorios } from '@/estado/recordatorios'
 import { useAplicarApariencia } from '@/estado/tema'
 import { Disposicion } from '@/componentes/Disposicion'
@@ -26,12 +30,24 @@ import { Onboarding, debeMostrarOnboarding } from '@/paginas/Onboarding'
  *
  * Rutas públicas (sin sesión): login, olvidé, restablecer, verificar, aviso.
  * El resto requieren autenticación y viven dentro de `Disposicion`.
+ *
+ * `ProveedorI18n` y `ProveedorAvisos` envuelven las DOS ramas, no solo la
+ * autenticada: el login, la verificación de correo y el restablecimiento
+ * muestran avisos y texto traducido igual que el resto de la app. Tenerlos
+ * solo dentro de la sesión dejaba la pantalla en negro para quien todavía no
+ * había entrado, que es justo quien más necesita que la pantalla funcione.
  */
 export default function App() {
   return (
-    <ProveedorAuth>
-      <PuertaAutenticacion />
-    </ProveedorAuth>
+    <LimiteDeError zona="app">
+      <ProveedorAuth>
+        <ProveedorI18n>
+          <ProveedorAvisos>
+            <PuertaAutenticacion />
+          </ProveedorAvisos>
+        </ProveedorI18n>
+      </ProveedorAuth>
+    </LimiteDeError>
   )
 }
 
@@ -39,11 +55,7 @@ function PuertaAutenticacion() {
   const auth = useAuth()
 
   if (auth.iniciando) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-fondo">
-        <p className="text-suave">Cargando…</p>
-      </div>
-    )
+    return <PantallaCargando />
   }
 
   if (!auth.autenticado) {
@@ -55,27 +67,45 @@ function PuertaAutenticacion() {
   }
 
   return (
-    <ProveedorI18n>
-      <ProveedorAvisos>
-        <ProveedorFinanzas>
-          <HashRouter>
-            <Contenido />
-          </HashRouter>
-        </ProveedorFinanzas>
-      </ProveedorAvisos>
-    </ProveedorI18n>
+    <ProveedorFinanzas>
+      <HashRouter>
+        <Contenido />
+      </HashRouter>
+    </ProveedorFinanzas>
   )
 }
 
+/**
+ * Arranque. Se ve el instante que tarda `/auth/me` en responder, así que en vez
+ * de la palabra "Cargando…" suelta va la marca: el salto a la app se siente
+ * como una continuación y no como un parpadeo.
+ */
+function PantallaCargando() {
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-fondo">
+      <MarcaGZ tamano={48} />
+      <span className="size-5 animate-spin rounded-full border-2 border-borde border-t-acento" />
+    </div>
+  )
+}
+
+/**
+ * Sin sesión, la raíz es la presentación y no el formulario de acceso: quien
+ * llega por primera vez necesita saber qué es esto antes de que le pidan un
+ * correo. Quien ya tiene cuenta entra por `/entrar`, y el navegador se acuerda
+ * de esa dirección.
+ */
 function RutasPublicas() {
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<Landing />} />
+      <Route path="/entrar" element={<Login />} />
+      <Route path="/crear-cuenta" element={<CrearCuenta />} />
       <Route path="/olvide-password" element={<OlvidePassword />} />
       <Route path="/restablecer-password" element={<RestablecerPassword />} />
       <Route path="/verificar-email" element={<VerificarEmail />} />
       <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
-      <Route path="*" element={<Login />} />
+      <Route path="*" element={<Landing />} />
     </Routes>
   )
 }

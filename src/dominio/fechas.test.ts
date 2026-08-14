@@ -3,6 +3,8 @@ import {
   aFechaLocal,
   diasEntre,
   diasRestantesDelPeriodo,
+  enDias,
+  fechaRelativa,
   mesesEntre,
   periodoDe,
   rangoPeriodo,
@@ -82,5 +84,30 @@ describe('siguienteOcurrencia', () => {
 
   it('avanza los semanales de siete en siete', () => {
     expect(siguienteOcurrencia('2026-08-01', 'semanal', '2026-08-13')).toBe('2026-08-15')
+  })
+})
+
+describe('enDias', () => {
+  it('usa singular con un día', () => {
+    expect(enDias(1)).toBe('1 día')
+  })
+
+  it('usa plural con cero y con varios', () => {
+    expect(enDias(0)).toBe('0 días')
+    expect(enDias(2)).toBe('2 días')
+    expect(enDias(30)).toBe('30 días')
+  })
+})
+
+describe('fechaRelativa', () => {
+  it('nombra hoy, mañana y ayer en vez de contar días', () => {
+    expect(fechaRelativa('2026-08-13', '2026-08-13')).toBe('hoy')
+    expect(fechaRelativa('2026-08-13', '2026-08-14')).toBe('mañana')
+    expect(fechaRelativa('2026-08-13', '2026-08-12')).toBe('ayer')
+  })
+
+  it('concuerda el plural en ambas direcciones', () => {
+    expect(fechaRelativa('2026-08-13', '2026-08-15')).toBe('en 2 días')
+    expect(fechaRelativa('2026-08-13', '2026-08-11')).toBe('hace 2 días')
   })
 })

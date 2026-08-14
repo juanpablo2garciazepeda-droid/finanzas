@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: juanpa-finanzas-backend
+    image: finanzas-gz-backend
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -23,22 +23,22 @@ services:
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-Juanpa Finanzas <no-reply@finanzasgz.com.mx>}
+      SMTP_FROM: ${SMTP_FROM:-Finanzas GZ <no-reply@finanzasgz.com.mx>}
     networks:
       - dokploy-network
       - default
     labels:
       - traefik.docker.network=dokploy-network
-      - traefik.http.routers.juanpa-finanzas-api.rule=Host(`api.finanzasgz.com.mx`)
-      - traefik.http.routers.juanpa-finanzas-api.entrypoints=web
-      - traefik.http.routers.juanpa-finanzas-api.service=juanpa-finanzas-api-svc
-      - traefik.http.routers.juanpa-finanzas-api.middlewares=redirect-to-https@file
-      - traefik.http.services.juanpa-finanzas-api-svc.loadbalancer.server.port=3000
-      - traefik.http.routers.juanpa-finanzas-apisecure.rule=Host(`api.finanzasgz.com.mx`)
-      - traefik.http.routers.juanpa-finanzas-apisecure.entrypoints=websecure
-      - traefik.http.routers.juanpa-finanzas-apisecure.service=juanpa-finanzas-apisecure-svc
-      - traefik.http.routers.juanpa-finanzas-apisecure.tls.certresolver=letsencrypt
-      - traefik.http.services.juanpa-finanzas-apisecure-svc.loadbalancer.server.port=3000
+      - traefik.http.routers.finanzas-gz-api.rule=Host(`api.finanzasgz.com.mx`)
+      - traefik.http.routers.finanzas-gz-api.entrypoints=web
+      - traefik.http.routers.finanzas-gz-api.service=finanzas-gz-api-svc
+      - traefik.http.routers.finanzas-gz-api.middlewares=redirect-to-https@file
+      - traefik.http.services.finanzas-gz-api-svc.loadbalancer.server.port=3000
+      - traefik.http.routers.finanzas-gz-apisecure.rule=Host(`api.finanzasgz.com.mx`)
+      - traefik.http.routers.finanzas-gz-apisecure.entrypoints=websecure
+      - traefik.http.routers.finanzas-gz-apisecure.service=finanzas-gz-apisecure-svc
+      - traefik.http.routers.finanzas-gz-apisecure.tls.certresolver=letsencrypt
+      - traefik.http.services.finanzas-gz-apisecure-svc.loadbalancer.server.port=3000
       - traefik.enable=true
 networks:
   dokploy-network:

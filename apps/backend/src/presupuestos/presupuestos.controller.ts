@@ -16,6 +16,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from '../auth/auth.service';
 import { Presupuesto } from './presupuesto.entity';
 import { DeepPartial, FindOptionsWhere } from 'typeorm';
+import { CrearPresupuestoDto, ActualizarPresupuestoDto } from '../common/dominio.dto';
 
 @Controller('presupuestos')
 @UseGuards(AuthGuard('jwt'))
@@ -41,7 +42,7 @@ export class PresupuestosController {
   }
 
   @Post()
-  create(@CurrentUser() user: JwtPayload, @Body() input: DeepPartial<Presupuesto>) {
+  create(@CurrentUser() user: JwtPayload, @Body() input: CrearPresupuestoDto) {
     return this.service.create(user.sub, input);
   }
 
@@ -49,7 +50,7 @@ export class PresupuestosController {
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: DeepPartial<Presupuesto>,
+    @Body() input: ActualizarPresupuestoDto,
   ) {
     return this.service.update(user.sub, id, input);
   }

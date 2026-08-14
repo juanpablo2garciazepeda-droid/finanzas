@@ -12,7 +12,7 @@ import type {
   Veredicto,
 } from './tipos'
 import { formatearMoneda, formatearPorcentaje, fraccion, sumar } from './dinero'
-import { periodoAnterior, periodoDe, ultimosPeriodos } from './fechas'
+import { enDias, periodoAnterior, periodoDe, ultimosPeriodos } from './fechas'
 import { cicloDe, esteCiclo, type Ciclo } from './ciclos'
 import { compromisoDeudas, proximosVencimientos } from './deudas'
 import { compromisoMetas } from './metas'
@@ -177,8 +177,14 @@ interface Formato {
   locale: string
 }
 
+/**
+ * Sin centavos, igual que en el resto de la interfaz. Las razones acompañan a
+ * la cifra grande del medidor, que va redondeada: leer "$1,830" arriba y
+ * "$1,830.00" justo debajo se ve como dos cuentas distintas. Los centavos
+ * siguen intactos por dentro; esto es solo cómo se enseña.
+ */
 function dinero(centavos: number, f: Formato): string {
-  return formatearMoneda(centavos, f.moneda, f.locale)
+  return formatearMoneda(centavos, f.moneda, f.locale, { conDecimales: false })
 }
 
 /**
@@ -330,7 +336,11 @@ export function evaluarGasto(
   const vencimientos = proximosVencimientos(ctx.deudas, ctx.hoy, ctx.ajustes.diasAvisoVencimiento)
   if (vencimientos.length > 0) {
     const v = vencimientos[0]
-    const cuando = v.vencido ? `venció hace ${Math.abs(v.dias)} días` : v.dias === 0 ? 'vence hoy' : `vence en ${v.dias} días`
+    const cuando = v.vencido
+      ? `venció hace ${enDias(Math.abs(v.dias))}`
+      : v.dias === 0
+        ? 'vence hoy'
+        : `vence en ${enDias(v.dias)}`
     razones.push({
       clave: 'vencimiento',
       nivel: v.vencido ? 'rojo' : 'ambar',

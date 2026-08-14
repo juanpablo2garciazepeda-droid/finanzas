@@ -2,7 +2,7 @@ import type { ContextoFinanciero } from './alertas'
 import type { PagoDeuda } from './tipos'
 import { calcularMargen } from './alertas'
 import { formatearMoneda, sumar } from './dinero'
-import { diasEntre, nombrePeriodo, periodoAnterior, ultimosPeriodos } from './fechas'
+import { diasEntre, enDias, nombrePeriodo, periodoAnterior, ultimosPeriodos } from './fechas'
 import { esteCiclo } from './ciclos'
 import { deudaPrioritaria, mesesAhorrados, proyectarDeuda } from './deudas'
 import { proyectarMeta } from './metas'
@@ -457,7 +457,7 @@ export function generarRecomendaciones(
       id: 'sin-registrar',
       tipo: 'habito',
       prioridad: 2,
-      titulo: `Llevas ${diasSinRegistrar} días sin registrar nada`,
+      titulo: `Llevas ${enDias(diasSinRegistrar)} sin registrar nada`,
       detalle: 'Los huecos son lo único que rompe estos números. Registrar toma cinco segundos y es lo que hace que el semáforo sirva.',
       icono: 'CircleAlert',
     })

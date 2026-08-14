@@ -1,17 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { User } from '../users/user.entity';
 import { Transaccion } from '../transacciones/transaccion.entity';
 import { Deuda } from '../deudas/deuda.entity';
 import { Ajuste } from '../ajustes/ajuste.entity';
 import { EmailService } from '../auth/email.service';
+import { correoDigest } from '../auth/plantillas';
 
 const APP_URL = process.env.APP_URL ?? 'https://finanzasgz.com.mx'
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+/** "1 ingreso" / "5 ingresos". Todos estos sustantivos pluralizan con -s. */
+function plural(n: number, singular: string): string {
+  return `${n} ${singular}${n === 1 ? '' : 's'}`
 }
 
 function fmtMoneda(centavos: number, moneda: string, locale: string): string {
@@ -117,45 +123,40 @@ export class DigestService {
     const locale = aj?.locale ?? 'es-MX'
     const fmt = (c: number) => fmtMoneda(c, moneda, locale)
 
-    const texto = [
-      `Hola${user.displayName ? ` ${user.displayName}` : ''},`,
-      '',
-      `Tu resumen de la semana (${desde} a ${hoy}):`,
-      `  · Ingresos: ${fmt(totIng)}`,
-      `  · Gastos:   ${fmt(totEgr)}`,
-      `  · Balance:  ${fmt(balance)}`,
-      `  · Deuda:    ${fmt(deudaTotal)}`,
-      '',
-      `Movimientos: ${ingresos.length} ingresos y ${egresos.length} gastos.`,
-      `Ver todo en la app: ${APP_URL}/#/movimientos`,
-    ].join('\n')
-    const html = `
-      <p>Hola${user.displayName ? ` <strong>${escapeHtml(user.displayName)}</strong>` : ''},</p>
-      <p>Tu resumen de la semana (<strong>${desde}</strong> a <strong>${hoy}</strong>):</p>
-      <ul>
-        <li>Ingresos: <strong>${escapeHtml(fmt(totIng))}</strong></li>
-        <li>Gastos: <strong>${escapeHtml(fmt(totEgr))}</strong></li>
-        <li>Balance: <strong style="color:${balance >= 0 ? '#10924B' : '#E2484F'}">${escapeHtml(fmt(balance))}</strong></li>
-        <li>Deuda: <strong>${escapeHtml(fmt(deudaTotal))}</strong></li>
-      </ul>
-      <p>Movimientos: ${ingresos.length} ingresos y ${egresos.length} gastos.</p>
-      <p><a href="${APP_URL}/#/movimientos">Ver todos en la app</a></p>
-    `
+    const sinMovimientos = txs.length === 0
+    const mensaje = sinMovimientos
+      ? 'No registraste movimientos esta semana. Un par de minutos capturando lo del súper y la gasolina es lo que hace que el semáforo sirva de algo.'
+      : balance >= 0
+        ? `Cerraste la semana con ${fmt(balance)} a favor. Si esto se sostiene, es el dinero que puede ir a tus metas.`
+        : `Gastaste ${fmt(-balance)} más de lo que entró. Vale la pena revisar en qué se fue antes de que el mes cierre.`
+
+    const correo = correoDigest({
+      nombre: user.displayName,
+      periodo: `${desde} a ${hoy}`,
+      filas: [
+        { etiqueta: 'Ingresos', valor: fmt(totIng), tono: 'bueno' },
+        { etiqueta: 'Gastos', valor: fmt(totEgr) },
+        {
+          etiqueta: 'Balance',
+          valor: fmt(balance),
+          tono: balance >= 0 ? 'bueno' : 'alerta',
+        },
+        { etiqueta: 'Deuda pendiente', valor: fmt(deudaTotal) },
+        {
+          etiqueta: 'Movimientos',
+          valor: `${plural(ingresos.length, 'ingreso')} · ${plural(egresos.length, 'gasto')}`,
+        },
+      ],
+      mensaje,
+      enlaceApp: `${APP_URL}/#/movimientos`,
+    })
+
     await this.email.enviar({
       para: user.email,
-      asunto: 'Tu resumen de la semana',
-      texto,
-      html,
+      asunto: correo.asunto,
+      texto: correo.texto,
+      html: correo.html,
     })
     return true
   }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }

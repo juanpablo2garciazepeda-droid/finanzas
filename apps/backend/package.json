@@ -1,7 +1,7 @@
 {
-  "name": "finanzas-backend",
+  "name": "finanzas-gz-backend",
   "version": "1.0.0",
-  "description": "Juanpa Finanzas - NestJS backend API",
+  "description": "Finanzas GZ - NestJS backend API",
   "private": true,
   "type": "commonjs",
   "scripts": {

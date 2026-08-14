@@ -16,6 +16,7 @@ import { JwtPayload } from '../auth/auth.service';
 import { Deuda } from './deuda.entity';
 import { PagoDeuda } from './pago-deuda.entity';
 import { DeepPartial } from 'typeorm';
+import { CrearDeudaDto, ActualizarDeudaDto, CrearPagoDto } from '../common/dominio.dto';
 
 @Controller('deudas')
 @UseGuards(AuthGuard('jwt'))
@@ -36,7 +37,7 @@ export class DeudasController {
   }
 
   @Post()
-  create(@CurrentUser() user: JwtPayload, @Body() input: DeepPartial<Deuda>) {
+  create(@CurrentUser() user: JwtPayload, @Body() input: CrearDeudaDto) {
     return this.service.create(user.sub, input);
   }
 
@@ -44,7 +45,7 @@ export class DeudasController {
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: DeepPartial<Deuda>,
+    @Body() input: ActualizarDeudaDto,
   ) {
     return this.service.update(user.sub, id, input);
   }
@@ -69,7 +70,7 @@ export class DeudasController {
   addPago(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: Partial<PagoDeuda>,
+    @Body() input: CrearPagoDto,
   ) {
     return this.service.addPago(user.sub, id, input);
   }

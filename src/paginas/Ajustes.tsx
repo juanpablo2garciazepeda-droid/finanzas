@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Download,
@@ -26,6 +26,8 @@ import {
   exportarMisDatos,
   importarMovimientosCsv,
 } from '@/datos/repositorio'
+import { Avatar } from '@/componentes/Avatar'
+import { MENSAJE_ERROR_FOTO, prepararFotoPerfil } from '@/utilidades/imagen'
 import { api } from '@/api/cliente'
 import { useAuth } from '@/estado/auth'
 import { useAvisos } from '@/estado/avisos'
@@ -40,7 +42,6 @@ import { Segmentado } from '@/componentes/ui/Segmentado'
 import { SelectorColor, SelectorIcono } from '@/componentes/ui/Selectores'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
 import { descargarMovimientosCSV } from '@/exportar/csv'
-import { descargarReporteAnual } from '@/exportar/pdf'
 
 const MONEDAS = [
   { codigo: 'MXN', locale: 'es-MX', etiqueta: 'Peso mexicano (MXN)' },
@@ -86,6 +87,7 @@ export function Ajustes() {
         <TituloSeccion>Tu cuenta</TituloSeccion>
         <Tarjeta className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
+            <FotoPerfil />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-tinta">{usuario?.email}</p>
               <p className="mt-0.5 truncate text-[13px] text-tenue">{usuario?.displayName || 'Sin nombre'}</p>
@@ -190,7 +192,7 @@ export function Ajustes() {
                   const url = URL.createObjectURL(blob)
                   const a = document.createElement('a')
                   a.href = url
-                  a.download = `juanpa-finanzas-${new Date().toISOString().slice(0, 10)}.json`
+                  a.download = `finanzas-gz-${new Date().toISOString().slice(0, 10)}.json`
                   a.click()
                   URL.revokeObjectURL(url)
                   mostrar('Descarga iniciada')
@@ -679,11 +681,23 @@ export function Ajustes() {
             </Boton>
             <Boton
               variante="secundario"
-              disabled={!hayMovimientos}
-              onClick={() => {
+              disabled={!hayMovimientos || generandoPDF}
+              onClick={async () => {
                 const anio = Number(periodo.slice(0, 4))
-                descargarReporteAnual(ctx, pagos, anio)
-                mostrar(`Reporte ${anio} descargado`)
+                setGenerandoPDF(true)
+                try {
+                  // Dinámico igual que el reporte mensual. Con uno solo de los
+                  // dos importado de forma estática, el bundler mete jsPDF y
+                  // html2canvas en el arranque de todos modos y el import
+                  // dinámico del otro deja de servir para nada.
+                  const { descargarReporteAnual } = await import('@/exportar/pdf')
+                  descargarReporteAnual(ctx, pagos, anio)
+                  mostrar(`Reporte ${anio} descargado`)
+                } catch {
+                  mostrar('No se pudo generar el PDF', 'error')
+                } finally {
+                  setGenerandoPDF(false)
+                }
               }}
             >
               <Download className="size-4" aria-hidden />
@@ -693,7 +707,7 @@ export function Ajustes() {
               variante="secundario"
               disabled={!hayMovimientos}
               onClick={() => {
-                descargarMovimientosCSV(transacciones, categorias, 'juanpa-finanzas-movimientos')
+                descargarMovimientosCSV(transacciones, categorias, 'finanzas-gz-movimientos')
                 mostrar('CSV descargado')
               }}
             >
@@ -1273,5 +1287,85 @@ function CambiarCorreo({
         </div>
       </form>
     </Modal>
+  )
+}
+
+/**
+ * Foto de perfil, editable desde Ajustes.
+ *
+ * Se recorta y reescala en el navegador antes de subirla (ver
+ * `utilidades/imagen.ts`): lo que llega al servidor es un JPEG de 256×256 de
+ * unas decenas de KB, no la foto de 4 MB que salió de la cámara.
+ */
+function FotoPerfil() {
+  const { usuario, refrescar } = useAuth()
+  const { mostrar } = useAvisos()
+  const entrada = useRef<HTMLInputElement>(null)
+  const [ocupado, setOcupado] = useState(false)
+
+  async function guardar(fotoUrl: string) {
+    setOcupado(true)
+    const res = await api.patch('/auth/perfil', { fotoUrl })
+    setOcupado(false)
+    if (!res.ok) {
+      mostrar(res.error ?? 'No se pudo guardar la foto', 'error')
+      return
+    }
+    await refrescar()
+    mostrar(fotoUrl ? 'Foto actualizada' : 'Foto quitada')
+  }
+
+  async function elegir(archivo: File | undefined) {
+    if (!archivo) return
+    setOcupado(true)
+    const res = await prepararFotoPerfil(archivo)
+    setOcupado(false)
+    if (!res.ok || !res.dataUrl) {
+      mostrar(MENSAJE_ERROR_FOTO[res.error ?? 'lectura'], 'error')
+      return
+    }
+    await guardar(res.dataUrl)
+  }
+
+  if (!usuario) return null
+
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-2">
+      <Avatar
+        nombre={usuario.displayName || usuario.email}
+        foto={usuario.fotoUrl}
+        tamano="lg"
+      />
+      <input
+        ref={entrada}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => {
+          void elegir(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={ocupado}
+          onClick={() => entrada.current?.click()}
+          className="rounded-full px-2 py-1 text-[12px] text-acento transition-colors hover:bg-elevada disabled:opacity-50"
+        >
+          {ocupado ? 'Espera…' : usuario.fotoUrl ? 'Cambiar' : 'Poner foto'}
+        </button>
+        {usuario.fotoUrl && (
+          <button
+            type="button"
+            disabled={ocupado}
+            onClick={() => void guardar('')}
+            className="rounded-full px-2 py-1 text-[12px] text-tenue transition-colors hover:bg-elevada hover:text-tinta disabled:opacity-50"
+          >
+            Quitar
+          </button>
+        )}
+      </div>
+    </div>
   )
 }

@@ -1,92 +1,136 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CheckCircle2, Mail, XCircle } from 'lucide-react'
-import { Boton, Tarjeta } from '@/componentes/ui/Basicos'
+import { CircleCheckBig, CircleX, Mail } from 'lucide-react'
+import { Boton } from '@/componentes/ui/Basicos'
+import { BarraPublica } from './Landing'
 import { api } from '@/api/cliente'
 import { useAuth } from '@/estado/auth'
-import { useAvisos } from '@/estado/avisos'
 
 /**
- * Pantalla a la que llega el usuario tras picar el enlace de verificación
- * en su correo. Leemos el `token` del query string y lo mandamos al backend.
+ * Destino del enlace de verificación del correo.
+ *
+ * Sirve para dos cosas distintas que llegan por la misma puerta:
+ *   · confirmar la cuenta recién creada, y
+ *   · confirmar un cambio de correo (`?cambio=1&correo=…`).
+ *
+ * El canje se hace UNA vez por token. Antes el efecto dependía del objeto
+ * `auth`, que se recreaba en cada render, así que la pantalla reenviaba el
+ * token en bucle: el primer intento lo quemaba y los siguientes devolvían
+ * "no es válido", con lo que una verificación correcta terminaba mostrando un
+ * error. El candado de abajo es lo que lo impide.
  */
 export function VerificarEmail() {
   const location = useLocation()
-  const navigate = useNavigate()
+  const navegar = useNavigate()
   const auth = useAuth()
-  const { mostrar } = useAvisos()
+
+  const { token, nuevoEmail } = useMemo(() => {
+    const p = new URLSearchParams(location.search)
+    return {
+      token: p.get('token') ?? '',
+      nuevoEmail: p.get('cambio') === '1' ? (p.get('correo') ?? undefined) : undefined,
+    }
+  }, [location.search])
+
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'error'>('cargando')
-  const [mensaje, setMensaje] = useState('Verificando tu correo…')
+  const [mensaje, setMensaje] = useState('Confirmando tu correo…')
+  const canjeado = useRef<string | null>(null)
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const token = params.get('token')
     if (!token) {
       setEstado('error')
-      setMensaje('Falta el token de verificación. Abre el enlace que te enviamos por correo.')
+      setMensaje('Este enlace viene incompleto. Ábrelo tal como llegó en el correo.')
       return
     }
+    if (canjeado.current === token) return
+    canjeado.current = token
+
     void (async () => {
-      const res = await api.post<{ user: { id: string; email: string; emailVerificado: boolean } }>(
-        '/auth/verificar-email',
-        { token },
-      )
-      if (res.ok && res.data) {
-        setEstado('ok')
-        setMensaje(`Listo, ${res.data.user.email} ya está verificada.`)
-        // Si el usuario ya estaba logueado, refrescamos su estado de auth.
-        await auth.refrescar()
-        mostrar('Correo verificado')
+      const res = await api.post<{
+        user: { email: string }
+        cambioAplicado: boolean
+      }>('/auth/verificar-email', { token, ...(nuevoEmail ? { nuevoEmail } : {}) })
+
+      if (!res.ok || !res.data) {
+        setEstado('error')
+        setMensaje(
+          res.error ??
+            'No pudimos confirmar el correo. El enlace pudo vencer o ya haberse usado.',
+        )
         return
       }
-      setEstado('error')
-      setMensaje(res.error ?? 'No se pudo verificar el correo.')
+
+      setEstado('ok')
+      setMensaje(
+        res.data.cambioAplicado
+          ? `Listo. Tu cuenta ahora usa ${res.data.user.email}.`
+          : `Listo. ${res.data.user.email} quedó confirmado.`,
+      )
+      // Si ya había sesión abierta, que el estado refleje el cambio sin
+      // obligar a recargar.
+      if (auth.autenticado) await auth.refrescar()
     })()
-  }, [location.search, auth, mostrar])
+    // `auth` queda fuera a propósito: se usa solo dentro del efecto y basta
+    // con el candado de `canjeado` para que corra una vez por token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, nuevoEmail])
+
+  const ICONO = {
+    cargando: <Mail className="size-7 text-acento" strokeWidth={1.75} aria-hidden />,
+    ok: <CircleCheckBig className="size-7 text-verde" strokeWidth={1.75} aria-hidden />,
+    error: <CircleX className="size-7 text-rojo" strokeWidth={1.75} aria-hidden />,
+  }
+  const FONDO = {
+    cargando: 'bg-acento/12',
+    ok: 'bg-verde/12',
+    error: 'bg-rojo/12',
+  }
+  const TITULO = {
+    cargando: 'Un momento',
+    ok: 'Correo confirmado',
+    error: 'No se pudo confirmar',
+  }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-fondo px-6 py-10">
-      <Tarjeta className="w-full max-w-sm text-center">
-        <div className="flex flex-col items-center gap-3">
-          {estado === 'cargando' && (
-            <Mail className="size-10 text-acento" aria-hidden />
-          )}
-          {estado === 'ok' && (
-            <CheckCircle2 className="size-10 text-verde" aria-hidden />
-          )}
-          {estado === 'error' && (
-            <XCircle className="size-10 text-rojo" aria-hidden />
-          )}
-          <p className="text-[15px] text-tinta">{mensaje}</p>
-        </div>
-        {estado !== 'cargando' && (
-          <div className="mt-4 space-y-2">
-            {auth.autenticado ? (
-              <Boton ancho onClick={() => navigate('/ajustes')}>
-                Ir a mi cuenta
-              </Boton>
-            ) : (
-              <>
-                <Boton ancho onClick={() => navigate('/')}>
+    <div className="min-h-dvh bg-fondo">
+      <BarraPublica />
+
+      <div className="mx-auto w-full max-w-md px-5 py-10 sm:py-16">
+        <div className="rounded-tarjeta bg-superficie p-6 text-center shadow-tarjeta sm:p-8">
+          <span
+            className={`mx-auto flex size-14 items-center justify-center rounded-[16px] ${FONDO[estado]}`}
+          >
+            {ICONO[estado]}
+          </span>
+          <h1 className="mt-4 font-display text-[clamp(1.375rem,4.5vw,1.625rem)] font-semibold tracking-[-0.03em] text-tinta">
+            {TITULO[estado]}
+          </h1>
+          <p className="mt-2 text-[15px] leading-relaxed text-suave">{mensaje}</p>
+
+          {estado !== 'cargando' && (
+            <div className="mt-6 space-y-2.5">
+              {auth.autenticado ? (
+                <Boton ancho onClick={() => navegar('/')}>
+                  Ir a mi tablero
+                </Boton>
+              ) : estado === 'ok' ? (
+                <Boton ancho onClick={() => navegar('/entrar')}>
                   Iniciar sesión
                 </Boton>
-                <Boton
-                  ancho
-                  variante="fantasma"
-                  onClick={async () => {
-                    const email = prompt('Tu correo:')
-                    if (!email) return
-                    const res = await api.post('/auth/reenviar-verificacion', { email })
-                    mostrar(res.ok ? 'Te enviamos un nuevo correo' : (res.error ?? 'No se pudo reenviar'))
-                  }}
-                >
-                  Reenviar correo de verificación
-                </Boton>
-              </>
-            )}
-          </div>
-        )}
-      </Tarjeta>
+              ) : (
+                <>
+                  <Boton ancho onClick={() => navegar('/crear-cuenta')}>
+                    Pedir un código nuevo
+                  </Boton>
+                  <Boton variante="fantasma" ancho onClick={() => navegar('/entrar')}>
+                    Volver a iniciar sesión
+                  </Boton>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

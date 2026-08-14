@@ -1,22 +1,51 @@
-# Juanpa Finanzas
+# Finanzas GZ
 
 App web de control financiero personal: gastos, presupuestos, deudas, metas de ahorro y un
 semáforo que responde a la única pregunta que importa antes de pagar — **¿puedo gastar esto?**
 
-Todo vive en el navegador. No hay servidor, no hay cuenta, no sale un solo dato del dispositivo.
+Son dos piezas: un SPA de React que se sirve como archivos estáticos y una API de NestJS sobre
+Postgres. Los datos viven en el servidor, atados a una cuenta con correo verificado, y se
+pueden exportar y borrar enteros desde Ajustes.
 
 ## Cómo correrla
 
+**Frontend**
+
 ```bash
-npm install
-npm run dev      # http://localhost:5173
-npm test         # 137 pruebas del dominio
-npm run build    # bundle de producción en dist/
+pnpm install
+pnpm dev         # http://localhost:5173
+pnpm test        # 166 pruebas del dominio
+pnpm build       # bundle de producción en dist/
 ```
 
-En el primer arranque la app está vacía. Hay un botón para cargar cuatro meses de datos de
-ejemplo con una deuda cara, una categoría rebasada y una meta que no llega a tiempo, para ver
-el semáforo y las recomendaciones trabajando.
+Por defecto apunta a `https://api.finanzasgz.com.mx`. Para desarrollar contra un backend
+local, `VITE_API_URL=http://localhost:3000 pnpm dev`.
+
+**Backend con Postgres local**
+
+```bash
+docker run -d --name finanzas-pg \
+  -e POSTGRES_USER=finanzas -e POSTGRES_PASSWORD=localtest -e POSTGRES_DB=finanzas \
+  -p 5432:5432 postgres:16-alpine
+
+cd apps/backend
+for f in sql/esquema.sql sql/migracion-*.sql; do
+  docker exec -i finanzas-pg psql -U finanzas -d finanzas < "$f"
+done
+
+npm install && npm run build
+DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_USER=finanzas \
+DATABASE_PASSWORD=localtest DATABASE_NAME=finanzas \
+JWT_SECRET=$(openssl rand -hex 48) EMAIL_MODE=console \
+APP_URL=http://localhost:5173 CORS_ORIGINS=http://localhost:5173 \
+node dist/main.js
+```
+
+Con `EMAIL_MODE=console` los correos no se envían: se imprimen en el log del backend, con el
+código de verificación bien visible. Es la forma de probar el alta sin configurar SMTP.
+
+Al registrarse, un trigger de Postgres siembra las 17 categorías iniciales y la fila de
+ajustes. La cuenta arranca vacía de movimientos a propósito.
 
 ## La idea
 
@@ -54,21 +83,26 @@ src/
     alertas.ts        El semáforo y el cálculo del margen  ← el corazón
     salud.ts          Puntaje 0-100 y series históricas
     recomendaciones.ts  Reglas que producen consejos accionables
-    *.test.ts         137 pruebas sobre todo lo anterior
+    *.test.ts         166 pruebas sobre todo lo anterior
 
-  datos/          Persistencia. El único lugar que toca IndexedDB.
-    db.ts             Esquema Dexie (v5)
-    repositorio.ts    Todas las escrituras; recalcula saldos derivados
-    demo.ts           Datos de ejemplo
+  api/            Cliente HTTP y manejo del JWT.
+    cliente.ts        fetch tipado; limpia el token en cualquier 401
+
+  datos/          Persistencia. El único lugar que habla con la API.
+    repositorio.ts    Todas las lecturas y escrituras; convierte bigint↔number
     categoriasIniciales.ts
 
   estado/         Puente entre datos y UI.
-    finanzas.tsx      Contexto con useLiveQuery: la UI reacciona sola
+    auth.tsx          Sesión, registro, canje del código de verificación
+    finanzas.tsx      Contexto con todo lo del usuario
     avisos.tsx        Toasts con deshacer
+    i18n.tsx          Diccionario es/en
     recordatorios.ts  Notificaciones de vencimientos
-    bloqueo.ts        PIN de pantalla (hash SHA-256 + sal)
 
   componentes/    UI reutilizable.
+    Marca.tsx         Símbolo y logotipo de Finanzas GZ
+    Avatar.tsx        Foto de perfil con la inicial como respaldo
+    LimiteDeError.tsx Red de seguridad: un error de render no deja pantalla negra
     ui/               Tarjeta, Botón, Campo, Barra, Insignia, Modal, Icono
     ui/CampoFecha.tsx Calendario propio: el nativo no acepta estilos
     MedidorMargen.tsx El arco del semáforo
@@ -90,7 +124,7 @@ leen como bugs.
 igual que cronológicamente, y evitan que un gasto del 31 a las 22:00 se registre en el mes
 siguiente por zona horaria. `fechas.ts` nunca pasa una fecha ISO a `new Date(texto)`.
 
-**El dominio no sabe que existe React ni IndexedDB.** Por eso el motor de alertas se prueba sin
+**El dominio no sabe que existe React ni la API.** Por eso el motor de alertas se prueba sin
 montar nada, y migrar a un backend (Supabase, Postgres) toca solo `datos/`.
 
 **Los saldos derivados están materializados.** `deuda.saldoActual` y `meta.montoActual` se
@@ -139,11 +173,22 @@ cifra no se mueve.
 componente: alguien sin deudas ni movimientos sacaría 100 y se le estaría diciendo que su salud es
 sólida cuando no se sabe nada de ella.
 
-**El PIN es un candado de pantalla, no autenticación.** No hay servidor contra el que validar y los
-datos siguen en IndexedDB sin cifrar; alguien con acceso al dispositivo y ganas puede leerlos desde
-las herramientas del navegador. Sirve para que quien tome tu teléfono no vea tus finanzas, y la
-pantalla de Ajustes lo dice con estas mismas palabras. El PIN se guarda como hash SHA-256 con sal,
-y la app se vuelve a bloquear tras dos minutos en segundo plano.
+**El registro pide una cosa por pantalla.** Nombre, correo, contraseña, foto y código: cinco
+pasos en vez de un formulario de nueve controles. Cada pantalla valida lo suyo en el momento, y
+el error sale junto al campo que lo provocó y no al final de un scroll.
+
+**La verificación va por código, no solo por enlace.** El correo casi nunca se abre en el mismo
+aparato donde uno se está registrando; con enlace hay que saltar de dispositivo y perder el
+contexto, con código se teclea en la pestaña que ya está abierta. El enlace sigue funcionando
+para quien lo tenga a la mano: son dos formas de canjear la misma fila, y usar una consume la
+otra. El código son 6 dígitos, se guarda hasheado, vence en 30 minutos y muere a los 6 intentos
+fallidos.
+
+**La foto de perfil se recorta en el navegador.** Sale de la cámara pesando 4 MB y llega al
+servidor como un JPEG de 256×256 de unos 25 KB, recortado al centro para no deformar caras. Se
+guarda como data URL en la propia fila del usuario: son dos contenedores sin almacenamiento de
+objetos, y montar un bucket para decenas de KB no se paga. El backend rechaza SVG —ejecuta
+script— y cualquier URL que no sea un data URL de imagen.
 
 **El color de texto sobre el acento se calcula, no se elige.** `--color-sobre-acento` es blanco
 en tema claro y negro en oscuro, y eso no es una preferencia: los seis acentos claros pasan 4.5:1
@@ -182,11 +227,26 @@ consultas no mide nada.
   proyección sí simula intereses mes a mes, pero si tu banco capitaliza, actualiza el monto a
   mano.
 - **Una sola moneda a la vez.** Cambiarla reformatea lo que ves; no convierte lo ya registrado.
-- **Los datos viven en este navegador.** Si borras los datos del sitio se van. Ajustes tiene
-  respaldo y restauración en JSON.
+- **Sin conexión no hay app.** Todo se lee de la API en cada arranque; no hay caché local ni
+  cola de escrituras pendientes.
+- **`cargarTodo()` hace una petición por deuda y por meta.** Con tres deudas y dos metas son
+  once llamadas por carga del tablero. Funciona, pero el día que alguien tenga veinte deudas
+  hará falta un endpoint que devuelva pagos y aportes en bloque.
+- **El límite de peticiones es por IP, no por cuenta.** Son 100 por minuto: de sobra para una
+  persona, pero varias detrás de la misma IP —una oficina, el NAT de una operadora móvil— se
+  lo reparten.
 
-## Si más adelante quieres backend
+## Backend
 
-`datos/repositorio.ts` es el único módulo que escribe. Reemplazar su interior por llamadas a
-Supabase o a una API propia no toca ni el dominio ni las páginas. Lo que sí habría que resolver
-es la reactividad: hoy `useLiveQuery` la da gratis.
+`apps/backend` es una API de NestJS sobre Postgres con TypeORM.
+
+- **El aislamiento entre usuarios se aplica en la capa de servicio.** `AuthCrudService` filtra
+  todo por el `userId` que sale del JWT; no hay Row Level Security. Pedir un registro ajeno
+  devuelve 404 y no 403 a propósito: un 403 confirmaría que ese id existe.
+- **Los DTO validan la entrada de todos los recursos.** Sin ellos, un tipo TypeScript como
+  `DeepPartial<Deuda>` se convierte en `Object` en tiempo de ejecución y el `ValidationPipe` de
+  Nest se salta la validación entera.
+- **Los montos viajan como cadenas de dígitos.** Son `bigint` en Postgres y JSON no tiene
+  enteros de 64 bits.
+- **Las migraciones son archivos sueltos en `sql/`, aditivos y repetibles.** Se aplican en
+  orden por fecha y usan `IF NOT EXISTS`; correr una dos veces no rompe nada.

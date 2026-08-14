@@ -24,6 +24,7 @@ import {
   TokenDto,
   ActualizarPerfilDto,
   EliminarCuentaDto,
+  VerificarCodigoDto,
 } from './auth.dto';
 import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from './auth.service';
@@ -40,7 +41,26 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   register(@Body() body: RegisterDto, @Req() req: Request) {
-    return this.auth.register(body.email, body.password, body.displayName, req);
+    return this.auth.register(
+      body.email,
+      body.password,
+      body.displayName,
+      body.fotoUrl,
+      req,
+    );
+  }
+
+  /**
+   * Canje del código de 6 dígitos. Más estricto que el resto: 10 por minuto
+   * por IP. Un código son un millón de combinaciones y la fila ya lleva su
+   * propio contador de intentos, pero el límite por IP es lo que impide
+   * repartir la fuerza bruta entre muchas cuentas a la vez.
+   */
+  @Post('verificar-codigo')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  verificarCodigo(@Body() body: VerificarCodigoDto, @Req() req: Request) {
+    return this.auth.verificarCodigo(body.email, body.codigo, req);
   }
 
   @Post('login')
@@ -61,6 +81,7 @@ export class AuthController {
 
   @Post('verificar-email')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   verificarEmail(@Body() body: TokenDto, @Req() req: Request) {
     return this.auth.verificarEmail(body.token, {
       nuevoEmail: body.nuevoEmail,
@@ -68,8 +89,11 @@ export class AuthController {
     });
   }
 
+  // Manda correo, así que se limita igual que el registro: sin tope, es un
+  // cañón gratis para inundar la bandeja de cualquiera con solo su dirección.
   @Post('reenviar-verificacion')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   reenviarVerificacion(@Body() body: OlvidePasswordDto, @Req() req: Request) {
     return this.auth.reenviarVerificacion(body.email, req);
   }

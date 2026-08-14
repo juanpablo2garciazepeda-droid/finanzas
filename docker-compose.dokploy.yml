@@ -3,23 +3,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: juanpa-finanzas
+    image: finanzas-gz
     restart: unless-stopped
     networks:
       - dokploy-network
       - default
     labels:
       - traefik.docker.network=dokploy-network
-      - traefik.http.routers.juanpa-finanzas-web.rule=Host(`finanzasgz.com.mx`)
-      - traefik.http.routers.juanpa-finanzas-web.entrypoints=web
-      - traefik.http.routers.juanpa-finanzas-web.service=juanpa-finanzas-web-svc
-      - traefik.http.routers.juanpa-finanzas-web.middlewares=redirect-to-https@file
-      - traefik.http.services.juanpa-finanzas-web-svc.loadbalancer.server.port=80
-      - traefik.http.routers.juanpa-finanzas-websecure.rule=Host(`finanzasgz.com.mx`)
-      - traefik.http.routers.juanpa-finanzas-websecure.entrypoints=websecure
-      - traefik.http.routers.juanpa-finanzas-websecure.service=juanpa-finanzas-websecure-svc
-      - traefik.http.routers.juanpa-finanzas-websecure.tls.certresolver=letsencrypt
-      - traefik.http.services.juanpa-finanzas-websecure-svc.loadbalancer.server.port=80
+      - traefik.http.routers.finanzas-gz-web.rule=Host(`finanzasgz.com.mx`)
+      - traefik.http.routers.finanzas-gz-web.entrypoints=web
+      - traefik.http.routers.finanzas-gz-web.service=finanzas-gz-web-svc
+      - traefik.http.routers.finanzas-gz-web.middlewares=redirect-to-https@file
+      - traefik.http.services.finanzas-gz-web-svc.loadbalancer.server.port=80
+      - traefik.http.routers.finanzas-gz-websecure.rule=Host(`finanzasgz.com.mx`)
+      - traefik.http.routers.finanzas-gz-websecure.entrypoints=websecure
+      - traefik.http.routers.finanzas-gz-websecure.service=finanzas-gz-websecure-svc
+      - traefik.http.routers.finanzas-gz-websecure.tls.certresolver=letsencrypt
+      - traefik.http.services.finanzas-gz-websecure-svc.loadbalancer.server.port=80
       - traefik.enable=true
 networks:
   dokploy-network:

@@ -56,7 +56,7 @@ export function generarReporteAnual(
 
   doc.setFontSize(20)
   doc.setTextColor(TINTA)
-  doc.text('Juanpa Finanzas', 40, 52)
+  doc.text('Finanzas GZ', 40, 52)
   doc.setFontSize(11)
   doc.setTextColor(SUAVE)
   doc.text(`Reporte anual ${anio}`, 40, 70)
@@ -117,7 +117,7 @@ export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[
 
   doc.setFontSize(20)
   doc.setTextColor(TINTA)
-  doc.text('Juanpa Finanzas', 40, 52)
+  doc.text('Finanzas GZ', 40, 52)
   doc.setFontSize(11)
   doc.setTextColor(SUAVE)
   doc.text(`Reporte de ${nombrePeriodo(ctx.periodo)}`, 40, 70)
@@ -245,9 +245,9 @@ export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[
 }
 
 export function descargarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[]) {
-  generarReporteMensual(ctx, pagos).save(`juanpa-finanzas-${ctx.periodo}.pdf`)
+  generarReporteMensual(ctx, pagos).save(`finanzas-gz-${ctx.periodo}.pdf`)
 }
 
 export function descargarReporteAnual(ctx: ContextoFinanciero, pagos: PagoDeuda[], anio: number) {
-  generarReporteAnual(ctx, pagos, anio).save(`juanpa-finanzas-${anio}.pdf`)
+  generarReporteAnual(ctx, pagos, anio).save(`finanzas-gz-${anio}.pdf`)
 }

@@ -14,9 +14,15 @@ import { DigestService } from '../digest/digest.service';
 import { TokenVerificacion } from './token-verificacion.entity';
 import { TokenResetPassword } from './token-reset-password.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { Request } from 'express';
+import {
+  correoBienvenida,
+  correoCambioCorreo,
+  correoReset,
+  correoVerificacion,
+} from './plantillas';
 
 export interface JwtPayload {
   sub: string;
@@ -33,6 +39,7 @@ export interface PublicUser {
   id: string;
   email: string;
   displayName: string;
+  fotoUrl: string | null;
   emailVerificado: boolean;
   rol: 'usuario' | 'admin';
   debeCambiarPassword: boolean;
@@ -41,8 +48,17 @@ export interface PublicUser {
   creadoEn: string;
 }
 
-const EXPIRACION_VERIFICACION_MS = 1000 * 60 * 60 * 24; // 24h
-const EXPIRACION_RESET_MS = 1000 * 60 * 30; // 30 min
+/**
+ * 30 minutos, igual para el enlace y para el código de 6 dígitos que van en el
+ * mismo correo: son dos formas de canjear la misma fila, y dos vencimientos
+ * distintos solo servirían para que la pantalla tuviera que explicar cuál de
+ * los dos caducó. Quien tarde más tiene el botón de reenviar a un clic.
+ */
+const EXPIRACION_VERIFICACION_MS = 1000 * 60 * 30;
+const EXPIRACION_RESET_MS = 1000 * 60 * 30;
+/** Intentos fallidos antes de quemar un código. 6 dígitos son un millón de
+ *  combinaciones; sin tope, un bot las recorre. */
+const MAX_INTENTOS_CODIGO = 6;
 const APP_URL = process.env.APP_URL ?? 'https://finanzasgz.com.mx';
 
 @Injectable()
@@ -78,8 +94,15 @@ export class AuthService {
     email: string,
     password: string,
     displayName: string,
+    fotoUrl?: string,
     request?: Request,
-  ): Promise<{ cuentaCreada: true; user: PublicUser; mensaje: string; emailEnviadoA: string }> {
+  ): Promise<{
+    cuentaCreada: true;
+    user: PublicUser;
+    mensaje: string;
+    emailEnviadoA: string;
+    emailOk: boolean;
+  }> {
     const lowerEmail = email.toLowerCase();
 
     if (!this.passwordCumplePolitica(password)) {
@@ -98,15 +121,15 @@ export class AuthService {
       );
     }
 
-    const user = await this.users.create(lowerEmail, password, displayName);
-    const token = await this.crearTokenVerificacion(user.id);
-    let emailOk = true
+    const user = await this.users.create(lowerEmail, password, displayName, fotoUrl);
+    const { token, codigo } = await this.crearTokenVerificacion(user.id);
+    let emailOk = true;
     try {
-      await this.enviarEmailVerificacion(user, token)
+      await this.enviarEmailVerificacion(user, token, codigo);
     } catch {
       // El usuario ya quedó creado; si el email falla, lo importante es no
       // mentirle. Devolvemos emailOk=false para que la UI lo sepa.
-      emailOk = false
+      emailOk = false;
     }
 
     void this.auditoria.registrar({
@@ -121,10 +144,113 @@ export class AuthService {
       cuentaCreada: true,
       user: this.toPublic(user),
       mensaje: emailOk
-        ? `Te enviamos un correo a ${user.email} para verificar tu cuenta.`
+        ? `Te enviamos un código a ${user.email}.`
         : `Cuenta creada, pero no pudimos enviar el correo a ${user.email}. Usa "Reenviar" en la siguiente pantalla.`,
       emailEnviadoA: user.email,
+      emailOk,
     };
+  }
+
+  /**
+   * Canje del código de 6 dígitos.
+   *
+   * A diferencia de `verificarEmail` (que recibe un token largo del enlace y
+   * no necesita saber de quién es), aquí hace falta el email: el código por sí
+   * solo no identifica a nadie, y buscar "el usuario que tenga este código"
+   * permitiría acertarle a la cuenta de cualquiera.
+   *
+   * Devuelve sesión iniciada. Quien acaba de demostrar que controla el correo
+   * no tiene por qué volver a teclear la contraseña que escribió hace un
+   * minuto: es el mismo flujo que ya conoce de Google.
+   */
+  async verificarCodigo(
+    email: string,
+    codigo: string,
+    request?: Request,
+  ): Promise<{ accessToken: string; user: PublicUser }> {
+    const invalido = new BadRequestException(
+      'El código no es correcto o ya expiró. Pide uno nuevo.',
+    );
+
+    const user = await this.users.findByEmail(email);
+    if (!user) throw invalido;
+
+    // El más reciente sin usar. Pedir otro código invalida el anterior de
+    // hecho (el usuario teclea el que le acaba de llegar), y así no hay que
+    // barrer filas viejas en cada intento.
+    const fila = await this.tokensVerificacion.findOne({
+      where: { usuarioId: user.id, usadoEn: IsNull() },
+      order: { creadoEn: 'DESC' },
+    });
+
+    if (!fila || !fila.codigoHash || fila.expiraEn < new Date()) {
+      throw invalido;
+    }
+
+    if (fila.intentos >= MAX_INTENTOS_CODIGO) {
+      void this.auditoria.registrar({
+        usuarioId: user.id,
+        emailIntento: user.email,
+        accion: 'verificacion_email',
+        detalles: { motivo: 'codigo_agotado' },
+        ip: this.ip(request),
+      });
+      throw new BadRequestException(
+        'Ese código se bloqueó por demasiados intentos. Pide uno nuevo.',
+      );
+    }
+
+    // Comparación en tiempo constante: comparar hashes con === filtra
+    // información por el tiempo que tarda en fallar.
+    const hashRecibido = this.hashToken(codigo);
+    const coincide = crypto.timingSafeEqual(
+      Buffer.from(hashRecibido, 'hex'),
+      Buffer.from(fila.codigoHash, 'hex'),
+    );
+
+    if (!coincide) {
+      await this.tokensVerificacion.increment({ id: fila.id }, 'intentos', 1);
+      void this.auditoria.registrar({
+        usuarioId: user.id,
+        emailIntento: user.email,
+        accion: 'verificacion_email',
+        detalles: { motivo: 'codigo_incorrecto', intento: fila.intentos + 1 },
+        ip: this.ip(request),
+      });
+      throw invalido;
+    }
+
+    await this.tokensVerificacion.update({ id: fila.id }, { usadoEn: new Date() });
+    await this.users.marcarEmailVerificado(user.id);
+    const actualizado = await this.users.findByIdOrThrow(user.id);
+
+    void this.auditoria.registrar({
+      usuarioId: user.id,
+      emailIntento: user.email,
+      accion: 'verificacion_email',
+      detalles: { via: 'codigo' },
+      ip: this.ip(request),
+      userAgent: this.ua(request),
+    });
+
+    // Best-effort: la bienvenida no puede tumbar el alta.
+    void this.enviarBienvenida(actualizado);
+
+    return this.issue(actualizado);
+  }
+
+  private async enviarBienvenida(user: User): Promise<void> {
+    try {
+      const correo = correoBienvenida(user.displayName, `${APP_URL}/#/`);
+      await this.email.enviar({
+        para: user.email,
+        asunto: correo.asunto,
+        texto: correo.texto,
+        html: correo.html,
+      });
+    } catch {
+      // best-effort
+    }
   }
 
   // ── Verificación de email ────────────────────────────────────────────────
@@ -157,8 +283,8 @@ export class AuthService {
       return { mensaje };
     }
 
-    const token = await this.crearTokenVerificacion(user.id);
-    await this.enviarEmailVerificacion(user, token);
+    const { token, codigo } = await this.crearTokenVerificacion(user.id);
+    await this.enviarEmailVerificacion(user, token, codigo);
 
     void this.auditoria.registrar({
       usuarioId: user.id,
@@ -193,7 +319,7 @@ export class AuthService {
         'Si el correo está libre y es válido, te enviamos un enlace de verificación.',
       )
     }
-    const token = await this.crearTokenVerificacion(userId)
+    const { token } = await this.crearTokenVerificacion(userId)
     await this.enviarEmailCambioCorreo(actual, lower, token)
     void this.auditoria.registrar({
       usuarioId: userId,
@@ -213,24 +339,19 @@ export class AuthService {
     nuevoEmail: string,
     token: string,
   ): Promise<void> {
-    const link = `${APP_URL}/#/verificar-email?token=${encodeURIComponent(token)}&cambio=1`
-    const texto = [
-      `Hola${user.displayName ? ` ${user.displayName}` : ''},`,
-      '',
-      `Recibimos una solicitud para cambiar el correo de tu cuenta a ${nuevoEmail}.`,
-      'Si fuiste tú, confirma aquí (expira en 24 horas):',
-      link,
-      '',
-      'Si no fuiste tú, ignora este mensaje: tu correo no cambia.',
-    ].join('\n')
-    const html = `
-      <p>Hola${user.displayName ? ` <strong>${escapeHtml(user.displayName)}</strong>` : ''},</p>
-      <p>Recibimos una solicitud para cambiar el correo de tu cuenta a <strong>${escapeHtml(nuevoEmail)}</strong>.</p>
-      <p>Si fuiste tú, confirma aquí (expira en 24 horas):</p>
-      <p><a href="${link}">${link}</a></p>
-      <p style="color:#666;font-size:13px">Si no fuiste tú, ignora este mensaje: tu correo no cambia.</p>
-    `
-    await this.email.enviar({ para: nuevoEmail, asunto: 'Confirma tu nuevo correo', texto, html })
+    // El `nuevoEmail` viaja en la URL porque el canje lo aplica el backend al
+    // recibirlo de vuelta: la fila del token solo sabe de qué usuario es, no a
+    // qué correo se quería mudar.
+    const link =
+      `${APP_URL}/#/verificar-email?token=${encodeURIComponent(token)}` +
+      `&cambio=1&correo=${encodeURIComponent(nuevoEmail)}`
+    const correo = correoCambioCorreo(user.displayName, nuevoEmail, link)
+    await this.email.enviar({
+      para: nuevoEmail,
+      asunto: correo.asunto,
+      texto: correo.texto,
+      html: correo.html,
+    })
   }
 
   /**
@@ -299,34 +420,41 @@ export class AuthService {
     return { user: this.toPublic(user), cambioAplicado };
   }
 
-  private async crearTokenVerificacion(usuarioId: string): Promise<string> {
+  /**
+   * Una fila sirve para las dos vías: el token largo del enlace y el código de
+   * 6 dígitos que se teclea. Van juntos porque son el mismo permiso concedido
+   * una sola vez; usar el uno consume al otro.
+   */
+  private async crearTokenVerificacion(
+    usuarioId: string,
+  ): Promise<{ token: string; codigo: string }> {
     const raw = crypto.randomBytes(32).toString('base64url');
-    const hash = this.hashToken(raw);
+    // randomInt y no Math.random: el segundo es predecible a partir de unas
+    // pocas salidas, y esto autoriza el alta de una cuenta.
+    const codigo = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
     await this.tokensVerificacion.insert({
       usuarioId,
-      tokenHash: hash,
+      tokenHash: this.hashToken(raw),
+      codigoHash: this.hashToken(codigo),
+      intentos: 0,
       expiraEn: new Date(Date.now() + EXPIRACION_VERIFICACION_MS),
     });
-    return raw;
+    return { token: raw, codigo };
   }
 
-  private async enviarEmailVerificacion(user: User, token: string): Promise<void> {
+  private async enviarEmailVerificacion(
+    user: User,
+    token: string,
+    codigo: string,
+  ): Promise<void> {
     const link = `${APP_URL}/#/verificar-email?token=${encodeURIComponent(token)}`;
-    const texto = [
-      `Hola${user.displayName ? ` ${user.displayName}` : ''},`,
-      '',
-      'Para terminar de crear tu cuenta en Juanpa Finanzas, confirma tu correo:',
-      link,
-      '',
-      'El enlace expira en 24 horas. Si no fuiste tú, ignora este mensaje.',
-    ].join('\n');
-    const html = `
-      <p>Hola${user.displayName ? ` <strong>${escapeHtml(user.displayName)}</strong>` : ''},</p>
-      <p>Para terminar de crear tu cuenta en <strong>Juanpa Finanzas</strong>, confirma tu correo:</p>
-      <p><a href="${link}">${link}</a></p>
-      <p style="color:#666;font-size:13px">El enlace expira en 24 horas. Si no fuiste tú, ignora este mensaje.</p>
-    `;
-    await this.email.enviar({ para: user.email, asunto: 'Verifica tu correo', texto, html });
+    const correo = correoVerificacion(user.displayName, codigo, link);
+    await this.email.enviar({
+      para: user.email,
+      asunto: correo.asunto,
+      texto: correo.texto,
+      html: correo.html,
+    });
   }
 
   // ── Login ────────────────────────────────────────────────────────────────
@@ -485,23 +613,13 @@ export class AuthService {
 
   private async enviarEmailReset(user: User, token: string): Promise<void> {
     const link = `${APP_URL}/#/restablecer-password?token=${encodeURIComponent(token)}`;
-    const texto = [
-      `Hola${user.displayName ? ` ${user.displayName}` : ''},`,
-      '',
-      'Recibimos una solicitud para restablecer la contraseña de tu cuenta.',
-      'Si fuiste tú, entra a este enlace (expira en 30 minutos):',
-      link,
-      '',
-      'Si no fuiste tú, ignora este mensaje: tu contraseña sigue igual.',
-    ].join('\n');
-    const html = `
-      <p>Hola${user.displayName ? ` <strong>${escapeHtml(user.displayName)}</strong>` : ''},</p>
-      <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
-      <p>Si fuiste tú, entra a este enlace (expira en 30 minutos):</p>
-      <p><a href="${link}">${link}</a></p>
-      <p style="color:#666;font-size:13px">Si no fuiste tú, ignora este mensaje: tu contraseña sigue igual.</p>
-    `;
-    await this.email.enviar({ para: user.email, asunto: 'Restablece tu contraseña', texto, html });
+    const correo = correoReset(user.displayName, link);
+    await this.email.enviar({
+      para: user.email,
+      asunto: correo.asunto,
+      texto: correo.texto,
+      html: correo.html,
+    });
   }
 
   // ── Perfil, password, sesión ────────────────────────────────────────────
@@ -548,7 +666,12 @@ export class AuthService {
 
   async actualizarPerfil(
     userId: string,
-    cambios: { displayName?: string },
+    cambios: {
+      displayName?: string;
+      idioma?: 'es' | 'en';
+      recibirDigest?: boolean;
+      fotoUrl?: string;
+    },
     request?: Request,
   ): Promise<{ user: PublicUser }> {
     const user = await this.users.actualizarPerfil(userId, cambios);
@@ -632,6 +755,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      fotoUrl: user.fotoUrl ?? null,
       emailVerificado: user.emailVerificado,
       rol: user.rol,
       debeCambiarPassword: user.debeCambiarPassword,
@@ -669,13 +793,4 @@ export class AuthService {
     if (typeof ua === 'string') return ua.slice(0, 500);
     return null;
   }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

@@ -24,6 +24,14 @@ export class User {
   @Column({ name: 'display_name', type: 'text', default: '' })
   displayName!: string;
 
+  /**
+   * Foto de perfil como data URL (`data:image/jpeg;base64,…`). El cliente
+   * recorta y reescala a 256×256 antes de mandarla, así que son decenas de KB.
+   * `null` = sin foto: la UI cae a la inicial del nombre.
+   */
+  @Column({ name: 'foto_url', type: 'text', nullable: true })
+  fotoUrl!: string | null;
+
   @Column({ name: 'email_verificado', type: 'boolean', default: false })
   emailVerificado!: boolean;
 

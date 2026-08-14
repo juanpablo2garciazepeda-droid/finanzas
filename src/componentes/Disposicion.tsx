@@ -15,6 +15,8 @@ import { nombrePeriodo, periodoActual, sumarMeses } from '@/dominio/fechas'
 import { useFinanzas } from '@/estado/finanzas'
 import { useAuth } from '@/estado/auth'
 import { clases } from './ui/Basicos'
+import { Avatar } from './Avatar'
+import { Logotipo } from './Marca'
 import { FormularioMovimiento } from './FormularioMovimiento'
 
 const SECCIONES = [
@@ -63,7 +65,7 @@ function BarraLateral() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-borde bg-superficie px-3 py-6 lg:flex">
       <div className="px-3 pb-8">
-        <MarcaApp />
+        <Logotipo />
       </div>
       <nav className="flex flex-1 flex-col gap-1">
         {SECCIONES.map(({ ruta, etiqueta, Icono }) => (
@@ -93,7 +95,11 @@ function BarraLateral() {
         }
       >
         {usuario ? (
-          <AvatarInicial nombre={usuario.displayName || usuario.email} tamaño={7} />
+          <Avatar
+            nombre={usuario.displayName || usuario.email}
+            foto={usuario.fotoUrl}
+            tamano="sm"
+          />
         ) : (
           <span className="flex size-7 items-center justify-center rounded-full bg-elevada" />
         )}
@@ -208,25 +214,6 @@ function NavegacionMovil() {
   )
 }
 
-function MarcaApp({ compacta }: { compacta?: boolean }) {
-  return (
-    <div className="flex shrink-0 items-center gap-2.5">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-acento">
-        <span className="cifras text-[15px] font-semibold text-sobre-acento">J</span>
-      </span>
-      {/* En pantallas angostas el logotipo cede el espacio al selector de mes. */}
-      <span
-        className={clases(
-          'font-display text-[17px] font-semibold text-tinta',
-          compacta && 'hidden sm:inline',
-        )}
-      >
-        Juanpa Finanzas
-      </span>
-    </div>
-  )
-}
-
 function Encabezado() {
   const { periodo, irAPeriodo, esPeriodoActual } = useFinanzas()
   const { usuario } = useAuth()
@@ -235,7 +222,7 @@ function Encabezado() {
     <header className="sticky top-0 z-20 cristal border-b border-borde">
       <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
         <div className="lg:hidden">
-          <MarcaApp compacta />
+          <Logotipo compacto tamano={28} />
         </div>
 
         <div className="ml-auto flex min-w-0 items-center gap-1 rounded-full bg-elevada p-1">
@@ -275,7 +262,7 @@ function Encabezado() {
           className="shrink-0 lg:hidden"
         >
           {usuario ? (
-            <AvatarInicial nombre={usuario.displayName || usuario.email} />
+            <Avatar nombre={usuario.displayName || usuario.email} foto={usuario.fotoUrl} />
           ) : (
             <span className="flex size-9 items-center justify-center rounded-full bg-elevada" />
           )}
@@ -285,26 +272,3 @@ function Encabezado() {
   )
 }
 
-/**
- * Avatar con la inicial del nombre. Si no hay displayName, usa la inicial
- * del email. El color de fondo se deriva del nombre (hash simple) para
- * que cada cuenta tenga un color consistente.
- */
-function AvatarInicial({ nombre, tamaño = 9 }: { nombre: string; tamaño?: 7 | 9 }) {
-  const inicial = (nombre.trim()[0] ?? '?').toUpperCase()
-  const hash = [...nombre].reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  const paleta = ['bg-acento', 'bg-verde', 'bg-ambar', 'bg-rosa', 'bg-morado']
-  const color = paleta[hash % paleta.length]
-  return (
-    <span
-      className={clases(
-        'flex shrink-0 items-center justify-center rounded-full font-semibold text-sobre-acento shadow-tarjeta',
-        tamaño === 9 ? 'size-9 text-[15px]' : 'size-7 text-[13px]',
-        color,
-      )}
-      aria-hidden
-    >
-      {inicial}
-    </span>
-  )
-}

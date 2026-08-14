@@ -15,6 +15,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from '../auth/auth.service';
 import { Categoria } from './categoria.entity';
 import { DeepPartial } from 'typeorm';
+import { CrearCategoriaDto, ActualizarCategoriaDto } from '../common/dominio.dto';
 
 @Controller('categorias')
 @UseGuards(AuthGuard('jwt'))
@@ -35,7 +36,7 @@ export class CategoriasController {
   }
 
   @Post()
-  create(@CurrentUser() user: JwtPayload, @Body() input: DeepPartial<Categoria>) {
+  create(@CurrentUser() user: JwtPayload, @Body() input: CrearCategoriaDto) {
     return this.service.create(user.sub, input);
   }
 
@@ -43,7 +44,7 @@ export class CategoriasController {
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: DeepPartial<Categoria>,
+    @Body() input: ActualizarCategoriaDto,
   ) {
     return this.service.update(user.sub, id, input);
   }

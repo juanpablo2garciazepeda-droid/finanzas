@@ -178,7 +178,13 @@ function ajusteHaciaApi(cambios: Partial<Ajustes>): Partial<ApiAjustes> {
   if (cambios.tema !== undefined) out.tema = cambios.tema
   if (cambios.acento !== undefined) out.acento = cambios.acento
   if (cambios.diasAvisoVencimiento !== undefined) out.diasAvisoVencimiento = cambios.diasAvisoVencimiento
-  if (cambios.umbralPrecaucion !== undefined) out.umbralPrecaucion = aStringBigInt(cambios.umbralPrecaucion)
+  // NO pasa por aStringBigInt: es una fracción (0.8), no centavos. La columna
+  // es numeric(3,2) y truncar a entero la dejaba en 0, con lo que cualquier
+  // presupuesto con un solo peso gastado ya salía en ámbar. Va como cadena
+  // igual que los bigint, que es lo que espera el DTO del backend.
+  if (cambios.umbralPrecaucion !== undefined) {
+    out.umbralPrecaucion = cambios.umbralPrecaucion.toFixed(2)
+  }
   if (cambios.notificacionesActivas !== undefined) out.notificacionesActivas = cambios.notificacionesActivas
   if (cambios.ultimaRevisionVencimientos !== undefined) {
     out.ultimaRevisionVencimientos = cambios.ultimaRevisionVencimientos

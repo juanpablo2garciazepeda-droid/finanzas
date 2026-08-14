@@ -37,7 +37,7 @@ export function AvisoPrivacidad() {
         <section className="mt-4 space-y-3 text-[14px] text-suave">
           <p>
             <strong className="text-tinta">Responsable.</strong> Juan Pablo
-            García Zepeda (&ldquo;Juanpa Finanzas&rdquo;), con domicilio en
+            García Zepeda (&ldquo;Finanzas GZ&rdquo;), con domicilio en
             Colima, México, es responsable del tratamiento de tus datos
             personales.
           </p>

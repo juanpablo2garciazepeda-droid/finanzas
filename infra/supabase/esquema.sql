@@ -1,4 +1,4 @@
--- Juanpa Finanzas — esquema y aislamiento entre usuarios.
+-- Finanzas GZ — esquema y aislamiento entre usuarios.
 --
 -- Convenciones heredadas de src/dominio/tipos.ts, que NO se cambian:
 --   · Los montos son enteros en centavos. $1,234.56 se guarda como 123456.

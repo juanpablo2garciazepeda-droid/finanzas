@@ -23,6 +23,18 @@ export class TokenVerificacion {
   @Column({ name: 'token_hash', type: 'text' })
   tokenHash!: string;
 
+  /**
+   * SHA-256 del código de 6 dígitos. Es la alternativa al enlace para quien
+   * abre el correo en otro aparato: teclea el código en la pestaña que ya
+   * tiene abierta en vez de saltar de dispositivo.
+   */
+  @Column({ name: 'codigo_hash', type: 'text', nullable: true })
+  codigoHash!: string | null;
+
+  /** Intentos fallidos. A los 6, el código se da por quemado. */
+  @Column({ name: 'intentos', type: 'integer', default: 0 })
+  intentos!: number;
+
   @Column({ name: 'expira_en', type: 'timestamptz' })
   expiraEn!: Date;
 

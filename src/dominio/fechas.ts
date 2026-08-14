@@ -127,14 +127,26 @@ export function formatearFechaCorta(iso: string, locale = 'es-MX'): string {
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(aFechaLocal(iso))
 }
 
+/**
+ * "1 día" / "3 días".
+ *
+ * Existe porque la app repite esta cuenta en media docena de sitios —el
+ * tablero, las recomendaciones, los vencimientos— y en varios de ellos salía
+ * "vence en 1 días". Es un detalle, pero es el tipo de detalle que le quita
+ * credibilidad a una app que presume de calcular bien.
+ */
+export function enDias(dias: number): string {
+  return `${dias} ${Math.abs(dias) === 1 ? 'día' : 'días'}`
+}
+
 /** "hoy", "mañana", "en 3 días", "hace 2 días". */
 export function fechaRelativa(desde: string, hasta: string): string {
   const dias = diasEntre(desde, hasta)
   if (dias === 0) return 'hoy'
   if (dias === 1) return 'mañana'
   if (dias === -1) return 'ayer'
-  if (dias > 0) return `en ${dias} días`
-  return `hace ${Math.abs(dias)} días`
+  if (dias > 0) return `en ${enDias(dias)}`
+  return `hace ${enDias(Math.abs(dias))}`
 }
 
 const DIAS_POR_PERIODICIDAD: Record<string, number> = {

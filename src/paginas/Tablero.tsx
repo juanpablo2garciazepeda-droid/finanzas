@@ -314,7 +314,7 @@ function Bienvenida() {
         Antes de gastar, pregúntale.
       </h1>
       <p className="mt-3 text-suave">
-        Juanpa Finanzas calcula cuánto te queda de verdad después de tus deudas y tus metas, y te dice si ese
+        Finanzas GZ calcula cuánto te queda de verdad después de tus deudas y tus metas, y te dice si ese
         gasto cabe.
       </p>
 

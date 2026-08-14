@@ -16,7 +16,7 @@ import * as nodemailer from 'nodemailer';
  *   SMTP_PORT=587
  *   SMTP_USER=apikey
  *   SMTP_PASSWORD=...
- *   SMTP_FROM="Juanpa Finanzas <no-reply@finanzasgz.com.mx>"
+ *   SMTP_FROM="Finanzas GZ <no-reply@finanzasgz.com.mx>"
  *   APP_URL=https://finanzasgz.com.mx
  */
 
@@ -57,7 +57,7 @@ export class EmailService implements ServicioEmail {
   async enviar(mensaje: EmailMensaje): Promise<void> {
     if (this.modo === 'smtp' && this.transporter) {
       const from =
-        process.env.SMTP_FROM ?? 'Juanpa Finanzas <no-reply@finanzasgz.com.mx>';
+        process.env.SMTP_FROM ?? 'Finanzas GZ <no-reply@finanzasgz.com.mx>';
       await this.transporter.sendMail({
         from,
         to: mensaje.para,

@@ -13,8 +13,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { TransaccionesService } from './transacciones.service';
 import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from '../auth/auth.service';
-import { Transaccion } from './transaccion.entity';
-import { DeepPartial } from 'typeorm';
+import { CrearTransaccionDto, ActualizarTransaccionDto } from '../common/dominio.dto';
 
 @Controller('transacciones')
 @UseGuards(AuthGuard('jwt'))
@@ -35,7 +34,7 @@ export class TransaccionesController {
   }
 
   @Post()
-  create(@CurrentUser() user: JwtPayload, @Body() input: DeepPartial<Transaccion>) {
+  create(@CurrentUser() user: JwtPayload, @Body() input: CrearTransaccionDto) {
     return this.service.create(user.sub, input);
   }
 
@@ -43,7 +42,7 @@ export class TransaccionesController {
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: DeepPartial<Transaccion>,
+    @Body() input: ActualizarTransaccionDto,
   ) {
     return this.service.update(user.sub, id, input);
   }

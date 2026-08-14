@@ -16,7 +16,6 @@ import { AuditoriaModule } from './auditoria/auditoria.module';
 import { RecurrentesModule } from './recurrentes/recurrentes.module';
 import { ImportExportModule } from './transacciones/import-export.module';
 import { DigestModule } from './digest/digest.module';
-import { DigestService } from './digest/digest.service';
 import { EmailModule } from './auth/email.module';
 import { HealthModule } from './health/health.module';
 import { AuditoriaController } from './auditoria/auditoria.controller';

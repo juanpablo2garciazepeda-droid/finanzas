@@ -25,12 +25,18 @@ export class UsersService {
     return user;
   }
 
-  async create(email: string, password: string, displayName: string): Promise<User> {
+  async create(
+    email: string,
+    password: string,
+    displayName: string,
+    fotoUrl?: string,
+  ): Promise<User> {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = this.users.create({
       email: email.toLowerCase(),
       passwordHash,
       displayName,
+      fotoUrl: fotoUrl || null,
       emailVerificado: false,
       emailVerificadoEn: null,
       tokenVersion: 0,
@@ -76,7 +82,12 @@ export class UsersService {
 
   async actualizarPerfil(
     userId: string,
-    cambios: { displayName?: string; idioma?: string; recibirDigest?: boolean },
+    cambios: {
+      displayName?: string;
+      idioma?: string;
+      recibirDigest?: boolean;
+      fotoUrl?: string;
+    },
   ): Promise<User> {
     const user = await this.findByIdOrThrow(userId);
     if (cambios.displayName !== undefined) {
@@ -87,6 +98,11 @@ export class UsersService {
     }
     if (cambios.recibirDigest !== undefined) {
       user.recibirDigest = cambios.recibirDigest;
+    }
+    // Cadena vacía = quitar la foto. Distinto de `undefined`, que es "no
+    // toques este campo": sin la diferencia no habría forma de borrarla.
+    if (cambios.fotoUrl !== undefined) {
+      user.fotoUrl = cambios.fotoUrl === '' ? null : cambios.fotoUrl;
     }
     return this.users.save(user);
   }

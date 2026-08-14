@@ -16,6 +16,7 @@ import { JwtPayload } from '../auth/auth.service';
 import { Meta } from './meta.entity';
 import { AporteMeta } from './aporte-meta.entity';
 import { DeepPartial } from 'typeorm';
+import { CrearMetaDto, ActualizarMetaDto, CrearAporteDto } from '../common/dominio.dto';
 
 @Controller('metas')
 @UseGuards(AuthGuard('jwt'))
@@ -36,7 +37,7 @@ export class MetasController {
   }
 
   @Post()
-  create(@CurrentUser() user: JwtPayload, @Body() input: DeepPartial<Meta>) {
+  create(@CurrentUser() user: JwtPayload, @Body() input: CrearMetaDto) {
     return this.service.create(user.sub, input);
   }
 
@@ -44,7 +45,7 @@ export class MetasController {
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: DeepPartial<Meta>,
+    @Body() input: ActualizarMetaDto,
   ) {
     return this.service.update(user.sub, id, input);
   }
@@ -69,7 +70,7 @@ export class MetasController {
   addAporte(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() input: Partial<AporteMeta>,
+    @Body() input: CrearAporteDto,
   ) {
     return this.service.addAporte(user.sub, id, input);
   }

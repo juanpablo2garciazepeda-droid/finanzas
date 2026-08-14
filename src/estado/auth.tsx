@@ -3,6 +3,7 @@ import {
   use,
   useCallback,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react'
@@ -21,6 +22,8 @@ export interface Usuario {
   id: string
   email: string
   displayName: string
+  /** Data URL de la foto de perfil, o `null` si no puso ninguna. */
+  fotoUrl: string | null
   emailVerificado: boolean
   rol: 'usuario' | 'admin'
   debeCambiarPassword: boolean
@@ -41,13 +44,25 @@ export interface AuthEstado {
     email: string,
     password: string,
     displayName: string,
+    fotoUrl?: string,
   ) => Promise<{
     ok: boolean
     status?: number
     error: string | null
     mensaje?: string
     emailEnviadoA?: string
+    emailOk?: boolean
   }>
+  /**
+   * Canjea el código de 6 dígitos del correo. Si es correcto, el backend
+   * devuelve sesión iniciada y aquí queda guardada: quien acaba de demostrar
+   * que controla el correo no tiene por qué volver a teclear la contraseña
+   * que escribió hace un minuto.
+   */
+  verificarCodigo: (
+    email: string,
+    codigo: string,
+  ) => Promise<{ ok: boolean; error: string | null }>
   cerrarSesion: () => void
   refrescar: () => Promise<void>
 }
@@ -63,6 +78,8 @@ interface PublicUserApi {
   id: string
   email: string
   displayName: string
+  /** Data URL de la foto de perfil, o `null` si no puso ninguna. */
+  fotoUrl: string | null
   emailVerificado: boolean
   rol: 'usuario' | 'admin'
   debeCambiarPassword: boolean
@@ -83,6 +100,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
         id: me.data.id,
         email: me.data.email,
         displayName: me.data.displayName,
+        fotoUrl: me.data.fotoUrl ?? null,
         emailVerificado: me.data.emailVerificado,
         rol: me.data.rol,
         debeCambiarPassword: me.data.debeCambiarPassword,
@@ -131,27 +149,52 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
   )
 
   const registrar = useCallback<AuthEstado['registrar']>(
-    async (email, password, displayName) => {
+    async (email, password, displayName, fotoUrl) => {
       const res = await api.post<{
         cuentaCreada: true
         user: PublicUserApi
         mensaje: string
         emailEnviadoA: string
-      }>('/auth/register', { email, password, displayName })
+        emailOk: boolean
+      }>('/auth/register', {
+        email,
+        password,
+        displayName,
+        // Solo si hay foto: mandar `undefined` deja la clave fuera del JSON,
+        // que es lo que espera el DTO (`@IsOptional`). Mandar cadena vacía
+        // fallaría la validación del formato.
+        ...(fotoUrl ? { fotoUrl } : {}),
+      })
       if (!res.ok || !res.data) {
         return { ok: false, status: res.status, error: res.error, mensaje: undefined }
       }
-      // El registro ya NO devuelve token: la cuenta está pendiente de
-      // verificar email. Devolvemos ok=true para que la UI muestre
-      // "te enviamos un correo" sin loguear todavía.
+      // El registro NO devuelve token: la cuenta queda pendiente de verificar
+      // el correo. La sesión llega al canjear el código.
       return {
         ok: true,
         error: null,
         mensaje: res.data.mensaje,
         emailEnviadoA: res.data.emailEnviadoA,
+        emailOk: res.data.emailOk,
       }
     },
     [],
+  )
+
+  const verificarCodigo = useCallback<AuthEstado['verificarCodigo']>(
+    async (email, codigo) => {
+      const res = await api.post<SesionRespuesta>('/auth/verificar-codigo', {
+        email,
+        codigo,
+      })
+      if (!res.ok || !res.data) return { ok: false, error: res.error }
+      // Cuenta recién creada: la sesión persiste. Quien se acaba de registrar
+      // no espera que cerrar la pestaña le tire la sesión.
+      guardarToken(res.data.accessToken, true)
+      await hidratar()
+      return { ok: true, error: null }
+    },
+    [hidratar],
   )
 
   const cerrarSesion = useCallback(() => {
@@ -163,15 +206,22 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     await hidratar()
   }, [hidratar])
 
-  const valor: AuthEstado = {
-    iniciando,
-    autenticado: usuario !== null,
-    usuario,
-    login,
-    registrar,
-    cerrarSesion,
-    refrescar,
-  }
+  // Memoizado a propósito: sin esto el objeto es nuevo en cada render y
+  // cualquier `useEffect` que dependa de `auth` se vuelve a disparar en bucle.
+  // Le pasaba a VerificarEmail, que reenviaba el token en cada vuelta.
+  const valor = useMemo<AuthEstado>(
+    () => ({
+      iniciando,
+      autenticado: usuario !== null,
+      usuario,
+      login,
+      registrar,
+      verificarCodigo,
+      cerrarSesion,
+      refrescar,
+    }),
+    [iniciando, usuario, login, registrar, verificarCodigo, cerrarSesion, refrescar],
+  )
 
   return <Contexto value={valor}>{children}</Contexto>
 }
