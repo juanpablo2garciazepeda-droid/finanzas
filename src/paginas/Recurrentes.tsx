@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Calendar, Plus, Trash2 } from 'lucide-react'
-import { Boton, Campo, Entrada, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
+import { Boton, Campo, Entrada, EntradaMoneda, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
 import { useFinanzas } from '@/estado/finanzas'
@@ -266,10 +266,9 @@ function EditorRecurrente({
           </Selector>
         </Campo>
         <Campo etiqueta="Monto" htmlFor="monto">
-          <Entrada
+          <EntradaMoneda
             id="monto"
             type="text"
-            inputMode="decimal"
             value={monto}
             onChange={(e) => setMonto(e.target.value)}
             placeholder={`Ej. ${(1234.56).toFixed(2)}`}

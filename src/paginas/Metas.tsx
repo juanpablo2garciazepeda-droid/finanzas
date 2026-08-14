@@ -20,6 +20,7 @@ import {
   Campo,
   Cifra,
   Entrada,
+  EntradaMoneda,
   Insignia,
   Tarjeta,
   TituloSeccion,
@@ -345,11 +346,11 @@ function FormularioMeta({
           </label>
           <div className="flex items-baseline gap-2 border-b border-borde pb-2 focus-within:border-acento">
             <span className="cifras text-2xl text-tenue">$</span>
-            <input
+            <EntradaMoneda
               id="objetivo"
+              base={false}
               value={objetivo}
               onChange={(e) => setObjetivo(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               autoComplete="off"
               className="cifras w-full bg-transparent text-4xl font-semibold text-tinta placeholder:text-tenue focus:outline-none"
@@ -360,11 +361,10 @@ function FormularioMeta({
         {!editando && (
           <div className="max-w-xs">
             <Campo etiqueta="Ya tengo ahorrado" ayuda="Opcional" htmlFor="inicial">
-              <Entrada
+              <EntradaMoneda
                 id="inicial"
                 value={inicial}
                 onChange={(e) => setInicial(e.target.value)}
-                inputMode="decimal"
                 placeholder="0.00"
                 className="cifras"
               />
@@ -469,11 +469,11 @@ function FormularioAporte({ meta, onCerrar }: { meta: Meta; onCerrar: () => void
           </label>
           <div className="flex items-baseline gap-2 border-b border-borde pb-2 focus-within:border-acento">
             <span className="cifras text-2xl text-tenue">$</span>
-            <input
+            <EntradaMoneda
               id="aporte"
+              base={false}
               value={monto}
               onChange={(e) => setMonto(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               autoComplete="off"
               className="cifras w-full bg-transparent text-4xl font-semibold text-tinta placeholder:text-tenue focus:outline-none"

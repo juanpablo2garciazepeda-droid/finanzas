@@ -11,7 +11,17 @@ import {
 import { copiarPresupuestos, fijarPresupuesto } from '@/datos/repositorio'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
-import { Barra, Boton, Campo, Entrada, Insignia, Tarjeta, TituloSeccion, Vacio, clases } from '@/componentes/ui/Basicos'
+import {
+  Barra,
+  Boton,
+  Campo,
+  EntradaMoneda,
+  Insignia,
+  Tarjeta,
+  TituloSeccion,
+  Vacio,
+  clases,
+} from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
 import { Modal } from '@/componentes/ui/Modal'
 
@@ -258,11 +268,10 @@ function EditorPresupuesto({
         className="space-y-4"
       >
         <Campo etiqueta="Límite" ayuda="Déjalo en cero para quitar el presupuesto" htmlFor="limite">
-          <Entrada
+          <EntradaMoneda
             id="limite"
             value={monto}
             onChange={(e) => setMonto(e.target.value)}
-            inputMode="decimal"
             placeholder="0.00"
             className={clases('cifras text-lg')}
           />

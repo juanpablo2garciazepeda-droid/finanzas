@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '@/api/cliente'
 import { useAuth } from './auth'
 import type { Idioma } from '@/dominio/tipos'
@@ -229,7 +229,13 @@ export function ProveedorI18n({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return 'es'
     return (localStorage.getItem(CLAVE_LOCAL) as Idioma | null) ?? 'es'
   })
-  const idioma: Idioma = (usuario?.idioma as Idioma | undefined) ?? idiomaLocal
+  // El estado local es la fuente de verdad para la UI. Si leyéramos
+  // `usuario?.idioma ?? idiomaLocal`, el `??` se queda con el del server y
+  // `setIdiomaLocal('en')` no pinta nada: el texto seguía en español hasta
+  // que el server confirmara y el objeto `usuario` se re-hidratara, lo cual
+  // no pasaba porque el PATCH /auth/perfil no actualiza el auth state. Por
+  // eso "le pico a English y no hace nada".
+  const idioma: Idioma = idiomaLocal
 
   const setIdioma = useCallback(
     async (nuevo: Idioma) => {
@@ -245,10 +251,20 @@ export function ProveedorI18n({ children }: { children: ReactNode }) {
     [usuario],
   )
 
-  // Sincronizar localStorage Y el estado local cuando el usuario cambia
-  // (login de alguien con idioma distinto, o refresh del perfil).
+  // Sincroniza el estado local solo cuando el USUARIO cambia (login de
+  // alguien con idioma distinto). Se ancla a `usuario.id` y no a
+  // `usuario.idioma` para que un cambio local del propio usuario no se
+  // reescriba con el valor viejo que aún tiene el objeto `usuario` en
+  // memoria (el PATCH no lo refresca).
+  const ultimoUsuarioSincronizado = useRef<string | null>(null)
   useEffect(() => {
-    if (usuario?.idioma && usuario.idioma !== idiomaLocal) {
+    if (!usuario) {
+      ultimoUsuarioSincronizado.current = null
+      return
+    }
+    if (ultimoUsuarioSincronizado.current === usuario.id) return
+    ultimoUsuarioSincronizado.current = usuario.id
+    if (usuario.idioma && usuario.idioma !== idiomaLocal) {
       setIdiomaLocal(usuario.idioma as Idioma)
       try {
         localStorage.setItem(CLAVE_LOCAL, usuario.idioma)
@@ -256,7 +272,7 @@ export function ProveedorI18n({ children }: { children: ReactNode }) {
         // sin localStorage no pasa nada grave
       }
     }
-  }, [usuario?.idioma, idiomaLocal])
+  }, [usuario, usuario?.id, usuario?.idioma, idiomaLocal])
 
   const t = useCallback(
     (clave: string, vars?: Record<string, string | number>): string => {

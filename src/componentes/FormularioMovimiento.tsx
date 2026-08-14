@@ -7,7 +7,7 @@ import { ordenarPorUso } from '@/dominio/categorias'
 import { crearTransaccion, actualizarTransaccion } from '@/datos/repositorio'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
-import { Boton, Campo, Entrada, Selector, clases } from './ui/Basicos'
+import { Boton, Campo, Entrada, EntradaMoneda, Selector, clases } from './ui/Basicos'
 import { CampoFecha } from './ui/CampoFecha'
 import { Icono } from './ui/Icono'
 import { Modal } from './ui/Modal'
@@ -160,11 +160,11 @@ export function FormularioMovimiento({
           </label>
           <div className="flex items-baseline gap-2 border-b border-borde pb-2 focus-within:border-acento">
             <span className="cifras text-2xl text-tenue">$</span>
-            <input
+            <EntradaMoneda
               id="monto"
+              base={false}
               value={monto}
               onChange={(e) => setMonto(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               autoComplete="off"
               className="cifras w-full bg-transparent text-4xl font-semibold text-tinta placeholder:text-tenue focus:outline-none"

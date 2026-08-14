@@ -1,6 +1,8 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
+  ChevronDown,
   Download,
   Eye,
   EyeOff,
@@ -36,7 +38,16 @@ import { hayNotificaciones, pedirPermiso } from '@/estado/recordatorios'
 import { useI18n } from '@/estado/i18n'
 import { MUESTRA_ACENTO, NOMBRE_TEMA, useEsOscuro } from '@/estado/tema'
 import { CampoFecha } from '@/componentes/ui/CampoFecha'
-import { Boton, Campo, Entrada, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
+import {
+  Boton,
+  Campo,
+  Entrada,
+  EntradaMoneda,
+  Selector,
+  Tarjeta,
+  TituloSeccion,
+  clases,
+} from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
 import { Segmentado } from '@/componentes/ui/Segmentado'
 import { SelectorColor, SelectorIcono } from '@/componentes/ui/Selectores'
@@ -105,48 +116,32 @@ export function Ajustes() {
                 </p>
               )}
             </div>
-            <Boton variante="secundario" onClick={cerrarSesion}>
-              <LogOut className="size-4" aria-hidden />
-              Cerrar sesión
-            </Boton>
-          </div>
-
-          {usuario && !usuario.emailVerificado && (
-            <Boton
-              variante="fantasma"
-              disabled={reenviandoVerificacion}
-              onClick={async () => {
-                setReenviandoVerificacion(true)
-                const res = await api.post('/auth/reenviar-verificacion', {
-                  email: usuario.email,
-                })
-                setReenviandoVerificacion(false)
-                mostrar(res.ok ? 'Te reenviamos el correo de verificación' : (res.error ?? 'No se pudo reenviar'))
-              }}
-              className="w-full sm:w-auto"
-            >
-              {reenviandoVerificacion ? 'Enviando…' : 'Reenviar correo de verificación'}
-            </Boton>
-          )}
-
-          <div className="flex flex-wrap gap-2">
             <Boton variante="secundario" onClick={() => setEditandoNombre(true)}>
               <Pencil className="size-4" aria-hidden />
-              Editar nombre
-            </Boton>
-            <Boton variante="secundario" onClick={() => setCambiandoCorreo(true)}>
-              Cambiar correo
-            </Boton>
-            <Boton variante="secundario" onClick={() => setCambiandoPassword(true)}>
-              Cambiar contraseña
-            </Boton>
-            <Boton variante="secundario" onClick={() => setConfirmandoLogoutAll(true)}>
-              <LogOut className="size-4" aria-hidden />
-              Cerrar sesión en todos lados
+              Editar perfil
             </Boton>
           </div>
         </Tarjeta>
       </section>
+
+      <SeccionCuenta
+        usuario={usuario}
+        reenviandoVerificacion={reenviandoVerificacion}
+        alReenviarVerificacion={async () => {
+          if (!usuario) return
+          setReenviandoVerificacion(true)
+          const res = await api.post('/auth/reenviar-verificacion', { email: usuario.email })
+          setReenviandoVerificacion(false)
+          mostrar(
+            res.ok
+              ? 'Te reenviamos el correo de verificación'
+              : (res.error ?? 'No se pudo reenviar'),
+          )
+        }}
+        alCambiarCorreo={() => setCambiandoCorreo(true)}
+        alCambiarPassword={() => setCambiandoPassword(true)}
+        alCerrarSesionEnTodos={() => setConfirmandoLogoutAll(true)}
+      />
 
       <section>
         <TituloSeccion>{t('ajustes.automatizacion')}</TituloSeccion>
@@ -327,7 +322,7 @@ export function Ajustes() {
 
       <section>
         <TituloSeccion>{t('ajustes.zona_peligrosa')}</TituloSeccion>
-        <Tarjeta>
+        <Tarjeta className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm text-tinta">{t('ajustes.eliminar_desc')}</p>
@@ -338,6 +333,16 @@ export function Ajustes() {
             <Boton variante="peligro" onClick={() => setConfirmandoEliminar(true)}>
               <Trash2 className="size-4" aria-hidden />
               Eliminar cuenta
+            </Boton>
+          </div>
+          <div className="border-t border-borde pt-3">
+            <Boton
+              variante="fantasma"
+              onClick={cerrarSesion}
+              className="w-full justify-center text-rojo hover:bg-rojo/10"
+            >
+              <LogOut className="size-4" aria-hidden />
+              Cerrar sesión
             </Boton>
           </div>
         </Tarjeta>
@@ -760,6 +765,106 @@ export function Ajustes() {
   )
 }
 
+/**
+ * Acciones de cuenta que no quieres ver en la tarjeta principal:
+ * reenviar verificación, cambiar correo/contraseña, cerrar sesión en todos
+ * los dispositivos. Viven en un colapsable para que la cabecera "Tu cuenta"
+ * se quede limpia: solo foto, correo, nombre y "Editar perfil". El ícono
+ * gira 180° al expandir, y el panel entra con un spring para que se sienta
+ * del mismo material que el resto de la app.
+ */
+function SeccionCuenta({
+  usuario,
+  reenviandoVerificacion,
+  alReenviarVerificacion,
+  alCambiarCorreo,
+  alCambiarPassword,
+  alCerrarSesionEnTodos,
+}: {
+  usuario: { email: string; emailVerificado: boolean } | null
+  reenviandoVerificacion: boolean
+  alReenviarVerificacion: () => void | Promise<void>
+  alCambiarCorreo: () => void
+  alCambiarPassword: () => void
+  alCerrarSesionEnTodos: () => void
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const reducido = useReducedMotion()
+  return (
+    <section>
+      <Tarjeta>
+        <button
+          type="button"
+          onClick={() => setAbierto((v) => !v)}
+          aria-expanded={abierto}
+          aria-controls="opciones-cuenta"
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <span className="text-[15px] font-medium text-tinta">Más opciones de cuenta</span>
+          <motion.span
+            animate={{ rotate: abierto ? 180 : 0 }}
+            transition={reducido ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 24 }}
+            className="text-suave"
+          >
+            <ChevronDown className="size-5" aria-hidden />
+          </motion.span>
+        </button>
+        <AnimatePresence initial={false}>
+          {abierto && (
+            <motion.div
+              id="opciones-cuenta"
+              initial={reducido ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={reducido ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+              transition={
+                reducido
+                  ? { duration: 0 }
+                  : { type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }
+              }
+              className="overflow-hidden"
+            >
+              <div className="mt-4 space-y-2 border-t border-borde pt-4">
+                {usuario && !usuario.emailVerificado && (
+                  <Boton
+                    variante="fantasma"
+                    disabled={reenviandoVerificacion}
+                    onClick={alReenviarVerificacion}
+                    className="w-full justify-start"
+                  >
+                    {reenviandoVerificacion ? 'Enviando…' : 'Reenviar correo de verificación'}
+                  </Boton>
+                )}
+                <Boton
+                  variante="fantasma"
+                  onClick={alCambiarCorreo}
+                  className="w-full justify-start"
+                >
+                  Cambiar correo
+                </Boton>
+                <Boton
+                  variante="fantasma"
+                  onClick={alCambiarPassword}
+                  className="w-full justify-start"
+                >
+                  Cambiar contraseña
+                </Boton>
+                <Boton
+                  variante="fantasma"
+                  onClick={alCerrarSesionEnTodos}
+                  className="w-full justify-start"
+                >
+                  <LogOut className="size-4" aria-hidden />
+                  Cerrar sesión en todos lados
+                </Boton>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Tarjeta>
+    </section>
+  )
+}
+
 function EditorCategoria({
   valor,
   onCerrar,
@@ -876,7 +981,7 @@ function CampoIngreso({
       htmlFor="sueldo"
     >
       <div className="flex max-w-sm items-center gap-2">
-        <Entrada
+        <EntradaMoneda
           id="sueldo"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
@@ -886,7 +991,6 @@ function CampoIngreso({
               void guardar()
             }
           }}
-          inputMode="decimal"
           placeholder="0.00"
           className="cifras text-lg"
         />
@@ -939,7 +1043,7 @@ function CampoSaldo({
       htmlFor="saldo"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Entrada
+        <EntradaMoneda
           id="saldo"
           value={monto}
           onChange={(e) => setMonto(e.target.value)}
@@ -949,7 +1053,6 @@ function CampoSaldo({
               void guardar()
             }
           }}
-          inputMode="decimal"
           placeholder="0.00"
           className="cifras w-40 text-lg"
         />

@@ -1,4 +1,13 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes } from 'react'
+import { useLayoutEffect, useRef } from 'react'
+import type {
+  ButtonHTMLAttributes,
+  ChangeEvent,
+  HTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  Ref,
+  SelectHTMLAttributes,
+} from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { NivelAlerta } from '@/dominio/tipos'
 
@@ -97,10 +106,106 @@ export function Campo({
 }
 
 const BASE_ENTRADA =
-  'w-full rounded-campo border border-borde bg-superficie px-3.5 py-2.5 text-[15px] text-tinta placeholder:text-tenue transition-shadow focus:border-acento focus:ring-3 focus:ring-acento/25 focus:outline-none'
+  'w-full rounded-campo border border-borde bg-superficie px-3.5 py-2.5 text-base text-tinta placeholder:text-tenue transition-shadow focus:border-acento focus:ring-3 focus:ring-acento/25 focus:outline-none'
 
 export function Entrada({ className, ref, ...props }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
   return <input ref={ref} className={clases(BASE_ENTRADA, className)} {...props} />
+}
+
+// ─── Entrada de dinero ────────────────────────────────────────────────────────
+
+/** Quita todo lo que no sea dígito o punto, y conserva solo el primer punto. */
+function limpiarMonto(texto: string): string {
+  let limpio = texto.replace(/[^\d.]/g, '')
+  const punto = limpio.indexOf('.')
+  if (punto !== -1) limpio = limpio.slice(0, punto + 1) + limpio.slice(punto + 1).replace(/\./g, '')
+  return limpio
+}
+
+/** "1234567.5" -> "1,234,567.5", como se escribe el peso mexicano. */
+function conSeparadores(crudo: string): string {
+  const [entero, decimales] = crudo.split('.')
+  const conComas = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return decimales === undefined ? conComas : `${conComas}.${decimales}`
+}
+
+/** Cuántos caracteres que no son coma hay en `texto` antes de `posicion`. */
+function utilesHasta(texto: string, posicion: number): number {
+  return texto.slice(0, posicion).replace(/,/g, '').length
+}
+
+/** En `formateado`, la posición justo después del n-ésimo carácter que no es coma. */
+function posicionTrasUtiles(formateado: string, n: number): number {
+  if (n <= 0) return 0
+  let contados = 0
+  for (let i = 0; i < formateado.length; i++) {
+    if (formateado[i] !== ',') {
+      contados++
+      if (contados === n) return i + 1
+    }
+  }
+  return formateado.length
+}
+
+/**
+ * Input de montos con separador de miles mientras se escribe.
+ *
+ * `value`/`onChange` siguen siendo el número crudo sin comas: lo que ya
+ * esperan `aCentavos` y el resto del dominio. Las comas son solo de
+ * presentación, para que "128000" se lea como 128,000 y no como 12,800.
+ *
+ * Insertar o borrar una coma corre el cursor si no se corrige a mano: al
+ * reescribir el `value` del input con el nuevo formato, el navegador lo
+ * manda al final. Por eso se cuenta cuántos dígitos había antes del cursor
+ * y se recoloca tras el re-render, en vez de dejar que el navegador decida.
+ */
+export function EntradaMoneda({
+  className,
+  base = true,
+  value,
+  onChange,
+  ref,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  value: string
+  onChange: (evento: ChangeEvent<HTMLInputElement>) => void
+  /** Estilo estándar de campo (borde, fondo, foco). Los montos grandes junto
+   *  al "$" ya traen su propia tipografía y no lo quieren. */
+  base?: boolean
+  ref?: Ref<HTMLInputElement>
+}) {
+  const propio = useRef<HTMLInputElement>(null)
+  const cursorPendiente = useRef<number | null>(null)
+
+  useLayoutEffect(() => {
+    if (cursorPendiente.current === null) return
+    propio.current?.setSelectionRange(cursorPendiente.current, cursorPendiente.current)
+    cursorPendiente.current = null
+  })
+
+  function manejarCambio(evento: ChangeEvent<HTMLInputElement>) {
+    const posPrevia = evento.target.selectionStart ?? evento.target.value.length
+    const utiles = utilesHasta(evento.target.value, posPrevia)
+    const crudo = limpiarMonto(evento.target.value)
+    cursorPendiente.current = posicionTrasUtiles(conSeparadores(crudo), utiles)
+    evento.target.value = crudo
+    onChange(evento)
+  }
+
+  return (
+    <input
+      ref={(nodo) => {
+        propio.current = nodo
+        if (typeof ref === 'function') ref(nodo)
+        else if (ref) ref.current = nodo
+      }}
+      value={conSeparadores(limpiarMonto(value))}
+      onChange={manejarCambio}
+      inputMode="decimal"
+      className={base ? clases(BASE_ENTRADA, className) : className}
+      {...props}
+    />
+  )
 }
 
 export function Selector({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {

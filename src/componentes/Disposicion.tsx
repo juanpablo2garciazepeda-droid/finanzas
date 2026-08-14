@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import {
@@ -27,10 +27,41 @@ const SECCIONES = [
   { ruta: '/metas', etiqueta: 'Metas', Icono: Target },
 ]
 
+/**
+ * `true` cuando un campo de texto está enfocado. La barra inferior y el FAB
+ * se ocultan mientras tanto: en iOS el teclado virtual empuja esos
+ * `position: fixed` justo encima de los números, y al hacer scroll la barra
+ * se queda pegada sobre el input como un bulto fuera de lugar. Lo detecta
+ * `focusin`/`focusout` en el document, no un listener por input, para no
+ * atar el comportamiento a cuántos forms haya.
+ */
+function useTecladoActivo(): boolean {
+  const [activo, setActivo] = useState(false)
+  useEffect(() => {
+    const esCampo = (el: EventTarget | null): boolean =>
+      el instanceof HTMLElement && el.matches('input, select, textarea, [contenteditable="true"]')
+    const alEntrar = (e: FocusEvent) => {
+      if (esCampo(e.target)) setActivo(true)
+    }
+    const alSalir = (e: FocusEvent) => {
+      if (!esCampo(e.relatedTarget)) setActivo(false)
+    }
+    document.addEventListener('focusin', alEntrar)
+    document.addEventListener('focusout', alSalir)
+    return () => {
+      document.removeEventListener('focusin', alEntrar)
+      document.removeEventListener('focusout', alSalir)
+    }
+  }, [])
+  return activo
+}
+
 export function Disposicion({ children }: { children: ReactNode }) {
   const [registrando, setRegistrando] = useState(false)
   const { pathname } = useLocation()
   const enAjustes = pathname === '/ajustes'
+  const tecladoActivo = useTecladoActivo()
+  const reducido = useReducedMotion()
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -42,18 +73,25 @@ export function Disposicion({ children }: { children: ReactNode }) {
       </div>
 
       {!enAjustes && (
-        <button
+        <motion.button
           type="button"
           onClick={() => setRegistrando(true)}
           aria-label="Registrar movimiento"
-          className="fixed right-5 bottom-24 z-30 flex size-14 items-center justify-center rounded-full bg-acento text-sobre-acento shadow-flotante transition-transform active:scale-95 lg:bottom-8"
+          className="fixed right-5 bottom-24 z-30 flex size-14 items-center justify-center rounded-full bg-acento text-sobre-acento shadow-flotante lg:bottom-8"
           style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+          animate={{
+            y: tecladoActivo ? 120 : 0,
+            scale: tecladoActivo ? 0.85 : 1,
+            opacity: tecladoActivo ? 0 : 1,
+          }}
+          transition={reducido ? { duration: 0 } : { type: 'spring', stiffness: 350, damping: 30 }}
+          whileTap={reducido ? undefined : { scale: 0.92 }}
         >
           <Plus className="size-7" strokeWidth={2.25} aria-hidden />
-        </button>
+        </motion.button>
       )}
 
-      <NavegacionMovil />
+      <NavegacionMovil tecladoActivo={tecladoActivo} />
 
       <FormularioMovimiento abierto={registrando} onCerrar={() => setRegistrando(false)} />
     </div>
@@ -121,7 +159,7 @@ function BarraLateral() {
  * la píldora entre posiciones, y `stiffness`/`damping` le dan masa sin rebote
  * de juguete.
  */
-function NavegacionMovil() {
+function NavegacionMovil({ tecladoActivo }: { tecladoActivo: boolean }) {
   const navegar = useNavigate()
   const { pathname } = useLocation()
   const barra = useRef<HTMLDivElement>(null)
@@ -150,7 +188,11 @@ function NavegacionMovil() {
   }
 
   return (
-    <nav className="area-segura-inferior fixed inset-x-0 bottom-0 z-30 border-t border-borde cristal lg:hidden">
+    <motion.nav
+      className="area-segura-inferior fixed inset-x-0 bottom-0 z-30 border-t border-borde cristal lg:hidden"
+      animate={{ y: tecladoActivo ? '120%' : 0 }}
+      transition={reducido ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 32 }}
+    >
       <div
         ref={barra}
         className="mx-auto flex max-w-md touch-none"
@@ -210,7 +252,7 @@ function NavegacionMovil() {
           )
         })}
       </div>
-    </nav>
+    </motion.nav>
   )
 }
 

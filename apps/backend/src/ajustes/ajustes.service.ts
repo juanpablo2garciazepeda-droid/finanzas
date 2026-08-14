@@ -27,9 +27,21 @@ export class AjustesService {
     return row;
   }
 
-  update(userId: string, input: Partial<Ajuste>): Promise<Ajuste> {
-    // Strip userId del patch para que el cliente no se re-asigne filas.
-    const { userId: _ignored, ...rest } = input as { userId?: string };
-    return this.repo.save({ ...rest, userId } as Ajuste);
+  async update(userId: string, input: Partial<Ajuste>): Promise<Ajuste> {
+    // Patrón "load → merge → save", igual que UsersService.actualizarPerfil.
+    // Si mandáramos `repo.save({ ...rest, userId })` con un partial, TypeORM
+    // haría un UPDATE con solo esos campos y devolvería la entidad con
+    // SOLO esos campos poblados. En el frontend, `ajusteDesdeApi` mapea
+    // `undefined` a `undefined`, y el `setDatos(prev => ...ajustes: nuevos)`
+    // pisaba tema/acento/cicloPago con `undefined` cada vez que cambiabas
+    // uno solo. Resultado: "cambié tema y se borró el acento" (y simétrico).
+    const actual = await this.repo.findOne({ where: { userId } });
+    if (!actual) throw new NotFoundException('ajuste not found');
+    for (const [clave, valor] of Object.entries(input)) {
+      if (valor !== undefined && clave !== 'userId') {
+        (actual as Record<string, unknown>)[clave] = valor;
+      }
+    }
+    return this.repo.save(actual);
   }
 }

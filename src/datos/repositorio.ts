@@ -340,17 +340,14 @@ export async function cargarTodo(): Promise<{
     aportes: ApiAporteMeta[]
   }>('/inicio')
 
+  // Un fallo de red NO es "esta cuenta está vacía". Devolver listas vacías
+  // aquí hacía que un 500, un timeout o el wifi cayéndose se vieran
+  // exactamente igual que una cuenta recién creada: el tablero en blanco y
+  // todas las deudas "desaparecidas". El error se propaga para que quien
+  // llama conserve lo que ya tenía en pantalla y avise de que no pudo
+  // actualizar.
   if (!res.ok || !res.data) {
-    return {
-      ajustes: ajustesPorDefecto(),
-      categorias: [],
-      transacciones: [],
-      presupuestos: [],
-      deudas: [],
-      pagos: [],
-      metas: [],
-      aportes: [],
-    }
+    throw new Error(res.error ?? 'No se pudieron cargar tus datos')
   }
 
   const d = res.data
@@ -363,24 +360,6 @@ export async function cargarTodo(): Promise<{
     pagos: d.pagos.map(pagoDesdeApi),
     metas: d.metas.map(metaDesdeApi),
     aportes: d.aportes.map(aporteDesdeApi),
-  }
-}
-
-function ajustesPorDefecto(): Ajustes {
-  return {
-    id: 'unico',
-    moneda: 'MXN',
-    locale: 'es-MX',
-    ingresoMensual: 0,
-    cicloPago: 'quincenal',
-    saldoInicial: 0,
-    saldoInicialFecha: '',
-    tema: 'sistema',
-    acento: 'grafito',
-    diasAvisoVencimiento: 7,
-    umbralPrecaucion: 0.8,
-    notificacionesActivas: false,
-    ultimaRevisionVencimientos: '',
   }
 }
 

@@ -230,6 +230,11 @@
        en vez de empujar el ancho de la página y forzar al usuario a
        pellizcar para hacer zoom out en móvil. */
     overflow-x: hidden;
+    /* Sin esto, Safari/Chrome en iOS pintan un recuadro gris-azul sobre
+       cualquier botón o enlace al tocarlo. Aquí ya existe feedback propio
+       (whileTap, active:scale-95, hover:bg-elevada), así que el recuadro del
+       sistema solo se ve como un parpadeo azul fuera de lugar. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   :root[data-tema='oscuro'] {
@@ -286,6 +291,16 @@
   input[type='number']::-webkit-outer-spin-button {
     appearance: none;
     margin: 0;
+  }
+
+  /* Mínimo 16px en todo input: iOS Safari auto-zooma al enfocar cualquier
+     campo con font-size menor a 16px, y eso descuadra el layout al cerrar
+     el teclado. La regla va aquí y no en cada componente para cubrir incluso
+     los <input> que terceros (date pickers, etc.) rendericen por su cuenta. */
+  input,
+  select,
+  textarea {
+    font-size: max(1rem, 16px);
   }
 
   ::-webkit-scrollbar {
@@ -345,7 +360,7 @@
 @keyframes entrada-suave {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -364,7 +379,10 @@
 }
 
 .animar-entrada {
-  animation: entrada-suave 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* 420ms en vez de 260ms: el cambio se siente, no salta. La curva
+     `cubic-bezier(0.22, 1, 0.36, 1)` sale con aceleración al final, como
+     un panel al que se le suelta el dedo. */
+  animation: entrada-suave 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animar-pulso {

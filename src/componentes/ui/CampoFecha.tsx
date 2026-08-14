@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { aFechaLocal, diasDelPeriodo, hoyISO, nombrePeriodo, periodoDe, sumarMeses } from '@/dominio/fechas'
 import { clases } from './Basicos'
@@ -10,6 +11,14 @@ import { clases } from './Basicos'
  * no sigue el tema de la app ni su tipografía, y en la práctica se ve como una
  * pieza de otro programa. Este calendario es HTML normal, así que hereda los
  * mismos tokens que todo lo demás y funciona igual en claro y en oscuro.
+ *
+ * El panel se pinta en un portal a `document.body`, con posición fija
+ * calculada a mano. Este campo casi siempre vive dentro de un modal con
+ * scroll propio (`overflow-y-auto`); si el panel colgara del DOM local con
+ * `position: absolute`, ese contenedor lo recorta apenas se abre cerca del
+ * borde, y sus botones ("Cerrar", los días) quedan fuera del área que
+ * realmente se puede tocar aunque se sigan viendo — de ahí que "no cierre".
+ * Fuera del árbol del modal esa clase de recorte ya no aplica.
  */
 
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -27,6 +36,15 @@ function rejillaDelMes(periodo: string): (string | null)[] {
     casillas.push(`${periodo}-${String(dia).padStart(2, '0')}`)
   }
   return casillas
+}
+
+interface Posicion {
+  left: number
+  ancho: number
+  /** Distancia al borde superior del viewport (se usa si abre hacia abajo). */
+  top: number
+  /** Distancia al borde inferior del viewport (se usa si abre hacia arriba). */
+  abajo: number
 }
 
 export function CampoFecha({
@@ -49,6 +67,7 @@ export function CampoFecha({
   const [abierto, setAbierto] = useState(false)
   const [mesVisible, setMesVisible] = useState(() => periodoDe(valor || hoyISO()))
   const [haciaArriba, setHaciaArriba] = useState(false)
+  const [posicion, setPosicion] = useState<Posicion | null>(null)
   const contenedor = useRef<HTMLDivElement>(null)
   const disparador = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -59,13 +78,35 @@ export function CampoFecha({
     if (abierto) setMesVisible(periodoDe(valor || hoyISO()))
   }, [abierto, valor])
 
-  // Abrir hacia abajo deja el calendario fuera de la pantalla cuando el campo
-  // está al final del formulario. Se mide antes de pintar para no ver el salto.
+  // Mide dónde está el botón que abre el calendario y decide si el panel
+  // abre hacia arriba o hacia abajo. Se repite en scroll/resize porque, al
+  // vivir en un portal, el panel ya no se mueve solo con su contenedor: si
+  // el modal que lo contiene se desplaza, hay que recalcular a mano.
   useEffect(() => {
     if (!abierto) return
-    const marco = disparador.current?.getBoundingClientRect()
-    if (marco) setHaciaArriba(marco.bottom + ALTO_PANEL > window.innerHeight && marco.top > ALTO_PANEL)
-    panel.current?.scrollIntoView({ block: 'nearest' })
+
+    const medir = () => {
+      const marco = disparador.current?.getBoundingClientRect()
+      if (!marco) return
+      setHaciaArriba(marco.bottom + ALTO_PANEL > window.innerHeight && marco.top > ALTO_PANEL)
+      setPosicion({
+        left: marco.left,
+        ancho: marco.width,
+        top: marco.bottom,
+        abajo: window.innerHeight - marco.top,
+      })
+    }
+
+    medir()
+    window.addEventListener('resize', medir)
+    // Captura: los contenedores con scroll propio (el modal) no burbujean
+    // su evento `scroll` hasta `window`, pero sí lo cruzan en la fase de
+    // captura.
+    window.addEventListener('scroll', medir, true)
+    return () => {
+      window.removeEventListener('resize', medir)
+      window.removeEventListener('scroll', medir, true)
+    }
   }, [abierto])
 
   useEffect(() => {
@@ -79,7 +120,10 @@ export function CampoFecha({
       }
     }
     const alPulsarFuera = (evento: MouseEvent) => {
-      if (!contenedor.current?.contains(evento.target as Node)) setAbierto(false)
+      const objetivo = evento.target as Node
+      if (!contenedor.current?.contains(objetivo) && !panel.current?.contains(objetivo)) {
+        setAbierto(false)
+      }
     }
 
     document.addEventListener('keydown', alTeclear, true)
@@ -106,6 +150,16 @@ export function CampoFecha({
     disparador.current?.focus()
   }
 
+  const estiloPanel: CSSProperties = posicion
+    ? {
+        position: 'fixed',
+        left: posicion.left,
+        width: '19rem',
+        maxWidth: 'calc(100vw - 2.5rem)',
+        ...(haciaArriba ? { bottom: posicion.abajo + 8 } : { top: posicion.top + 8 }),
+      }
+    : { position: 'fixed', visibility: 'hidden' }
+
   return (
     <div className="relative" ref={contenedor}>
       <button
@@ -125,97 +179,97 @@ export function CampoFecha({
         <CalendarDays className="size-[18px] shrink-0 text-acento" aria-hidden />
       </button>
 
-      {abierto && (
-        <div
-          ref={panel}
-          role="dialog"
-          aria-label="Elegir fecha"
-          className={clases(
-            'animar-entrada absolute z-50 w-[19rem] max-w-[calc(100vw-2.5rem)] rounded-tarjeta border border-borde bg-superficie p-3 shadow-flotante',
-            haciaArriba ? 'bottom-full mb-2' : 'mt-2',
-          )}
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setMesVisible(sumarMeses(mesVisible, -1))}
-              aria-label="Mes anterior"
-              className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
-            >
-              <ChevronLeft className="size-4" aria-hidden />
-            </button>
-            <span aria-live="polite" className="text-[15px] font-medium text-tinta capitalize">
-              {nombrePeriodo(mesVisible)}
-            </span>
-            <button
-              type="button"
-              onClick={() => setMesVisible(sumarMeses(mesVisible, 1))}
-              aria-label="Mes siguiente"
-              className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
-            >
-              <ChevronRight className="size-4" aria-hidden />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-7 gap-0.5">
-            {DIAS.map((dia, i) => (
-              <span key={`${dia}-${i}`} className="py-1 text-center text-[12px] font-medium text-tenue">
-                {dia}
+      {abierto &&
+        createPortal(
+          <div
+            ref={panel}
+            role="dialog"
+            aria-label="Elegir fecha"
+            style={estiloPanel}
+            className="animar-entrada z-50 rounded-tarjeta border border-borde bg-superficie p-3 shadow-flotante"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setMesVisible(sumarMeses(mesVisible, -1))}
+                aria-label="Mes anterior"
+                className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
+              >
+                <ChevronLeft className="size-4" aria-hidden />
+              </button>
+              <span aria-live="polite" className="text-[15px] font-medium text-tinta capitalize">
+                {nombrePeriodo(mesVisible)}
               </span>
-            ))}
+              <button
+                type="button"
+                onClick={() => setMesVisible(sumarMeses(mesVisible, 1))}
+                aria-label="Mes siguiente"
+                className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
+              >
+                <ChevronRight className="size-4" aria-hidden />
+              </button>
+            </div>
 
-            {casillas.map((fecha, indice) => {
-              if (fecha === null) return <span key={`hueco-${indice}`} />
-              const numero = Number(fecha.slice(8, 10))
-              const elegida = fecha === valor
-              const esHoy = fecha === hoy
-              const deshabilitada = fueraDeRango(fecha)
-              return (
-                <button
-                  key={fecha}
-                  type="button"
-                  disabled={deshabilitada}
-                  aria-current={esHoy ? 'date' : undefined}
-                  aria-pressed={elegida}
-                  onClick={() => elegir(fecha)}
-                  className={clases(
-                    'cifras flex aspect-square items-center justify-center rounded-full text-[14px] transition-colors',
-                    elegida
-                      ? 'bg-acento font-semibold text-sobre-acento'
-                      : deshabilitada
-                        ? 'text-tenue/40'
-                        : 'text-tinta hover:bg-elevada',
-                    esHoy && !elegida && 'ring-1 ring-acento',
-                  )}
-                >
-                  {numero}
-                </button>
-              )
-            })}
-          </div>
+            <div className="grid grid-cols-7 gap-0.5">
+              {DIAS.map((dia, i) => (
+                <span key={`${dia}-${i}`} className="py-1 text-center text-[12px] font-medium text-tenue">
+                  {dia}
+                </span>
+              ))}
 
-          <div className="mt-2 flex items-center justify-between border-t border-borde pt-2">
-            <button
-              type="button"
-              onClick={() => elegir(hoy)}
-              disabled={fueraDeRango(hoy)}
-              className="rounded-full px-3 py-1.5 text-[13px] font-medium text-acento transition-colors hover:bg-elevada disabled:opacity-40"
-            >
-              Hoy
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAbierto(false)
-                disparador.current?.focus()
-              }}
-              className="rounded-full px-3 py-1.5 text-[13px] text-suave transition-colors hover:bg-elevada hover:text-tinta"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
+              {casillas.map((fecha, indice) => {
+                if (fecha === null) return <span key={`hueco-${indice}`} />
+                const numero = Number(fecha.slice(8, 10))
+                const elegida = fecha === valor
+                const esHoy = fecha === hoy
+                const deshabilitada = fueraDeRango(fecha)
+                return (
+                  <button
+                    key={fecha}
+                    type="button"
+                    disabled={deshabilitada}
+                    aria-current={esHoy ? 'date' : undefined}
+                    aria-pressed={elegida}
+                    onClick={() => elegir(fecha)}
+                    className={clases(
+                      'cifras flex aspect-square items-center justify-center rounded-full text-[14px] transition-colors',
+                      elegida
+                        ? 'bg-acento font-semibold text-sobre-acento'
+                        : deshabilitada
+                          ? 'text-tenue/40'
+                          : 'text-tinta hover:bg-elevada',
+                      esHoy && !elegida && 'ring-1 ring-acento',
+                    )}
+                  >
+                    {numero}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-2 flex items-center justify-between border-t border-borde pt-2">
+              <button
+                type="button"
+                onClick={() => elegir(hoy)}
+                disabled={fueraDeRango(hoy)}
+                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-acento transition-colors hover:bg-elevada disabled:opacity-40"
+              >
+                Hoy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAbierto(false)
+                  disparador.current?.focus()
+                }}
+                className="rounded-full px-3 py-1.5 text-[13px] text-suave transition-colors hover:bg-elevada hover:text-tinta"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* Valor real para formularios y autocompletado; nunca se muestra. */}
       <input type="hidden" name={idCampo} value={valor} readOnly />

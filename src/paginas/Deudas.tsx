@@ -35,6 +35,7 @@ import {
   Campo,
   Cifra,
   Entrada,
+  EntradaMoneda,
   Insignia,
   Selector,
   Tarjeta,
@@ -402,11 +403,11 @@ function FormularioDeuda({ editando, onCerrar }: { editando?: Deuda; onCerrar: (
           </label>
           <div className="flex items-baseline gap-2 border-b border-borde pb-2 focus-within:border-acento">
             <span className="cifras text-2xl text-tenue">$</span>
-            <input
+            <EntradaMoneda
               id="original"
+              base={false}
               value={montoOriginal}
               onChange={(e) => setMontoOriginal(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               autoComplete="off"
               className="cifras w-full bg-transparent text-4xl font-semibold text-tinta placeholder:text-tenue focus:outline-none"
@@ -477,11 +478,10 @@ function FormularioDeuda({ editando, onCerrar }: { editando?: Deuda; onCerrar: (
             ayuda={pagoManual === null ? 'Calculado con el plazo que elegiste' : 'Lo pusiste tú'}
             htmlFor="porPago"
           >
-            <Entrada
+            <EntradaMoneda
               id="porPago"
               value={pagoManual ?? (porPago > 0 ? String(porPago / 100) : '')}
               onChange={(e) => setPagoManual(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               className="cifras"
             />
@@ -600,11 +600,11 @@ function FormularioPago({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => voi
           </label>
           <div className="flex items-baseline gap-2 border-b border-borde pb-2 focus-within:border-acento">
             <span className="cifras text-2xl text-tenue">$</span>
-            <input
+            <EntradaMoneda
               id="abono"
+              base={false}
               value={monto}
               onChange={(e) => setMonto(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               autoComplete="off"
               className="cifras w-full bg-transparent text-4xl font-semibold text-tinta placeholder:text-tenue focus:outline-none"

@@ -7,7 +7,7 @@ import { hoyISO, sumarDias } from '@/dominio/fechas'
 import { crearTransaccion } from '@/datos/repositorio'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
-import { Boton, clases } from './ui/Basicos'
+import { Boton, EntradaMoneda, clases } from './ui/Basicos'
 import { Icono } from './ui/Icono'
 import { Modal } from './ui/Modal'
 import { MedidorMargen } from './MedidorMargen'
@@ -86,11 +86,11 @@ export function SimuladorGasto({ onCerrar }: { onCerrar: () => void }) {
           </label>
           <div className="flex items-baseline gap-2 border-b border-borde pb-2 focus-within:border-acento">
             <span className="cifras text-2xl text-tenue">$</span>
-            <input
+            <EntradaMoneda
               id="montoSimulado"
+              base={false}
               value={monto}
               onChange={(e) => setMonto(e.target.value)}
-              inputMode="decimal"
               placeholder="0.00"
               autoComplete="off"
               autoFocus

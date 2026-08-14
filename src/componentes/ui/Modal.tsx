@@ -22,17 +22,34 @@ export function Modal({
   ancho?: string
 }) {
   const panel = useRef<HTMLDivElement>(null)
+  // El efecto de abajo solo debe correr al abrir y cerrar el modal, no cada
+  // vez que `onCerrar` cambia de identidad (algo tan común como escribir en
+  // un campo del formulario, si ese formulario vive en el mismo componente
+  // que crea el `onCerrar` en línea). Si dependiera de `onCerrar`, cada
+  // tecleo reiniciaría el bloqueo de scroll y volvería a enfocar el primer
+  // control del modal, robándole el foco a lo que se esté escribiendo.
+  const onCerrarRef = useRef(onCerrar)
+  onCerrarRef.current = onCerrar
 
   useEffect(() => {
     if (!abierto) return
 
     const alPresionar = (evento: KeyboardEvent) => {
-      if (evento.key === 'Escape') onCerrar()
+      if (evento.key === 'Escape') onCerrarRef.current()
     }
     document.addEventListener('keydown', alPresionar)
 
-    const overflowPrevio = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // `overflow: hidden` en el body no basta en iOS Safari: el fondo igual
+    // se arrastra con el dedo (rubber-banding) aunque no haya scrollbar.
+    // Fijar el body en su posición actual sí lo bloquea en todos lados; al
+    // cerrar se restaura el scroll exacto de antes, sin saltos.
+    const scrollY = window.scrollY
+    const cuerpo = document.body.style
+    const previo = { position: cuerpo.position, top: cuerpo.top, left: cuerpo.left, right: cuerpo.right }
+    cuerpo.position = 'fixed'
+    cuerpo.top = `-${scrollY}px`
+    cuerpo.left = '0'
+    cuerpo.right = '0'
 
     // El primer campo enfocado ahorra un toque en el flujo más frecuente.
     const primero = panel.current?.querySelector<HTMLElement>(
@@ -42,9 +59,13 @@ export function Modal({
 
     return () => {
       document.removeEventListener('keydown', alPresionar)
-      document.body.style.overflow = overflowPrevio
+      cuerpo.position = previo.position
+      cuerpo.top = previo.top
+      cuerpo.left = previo.left
+      cuerpo.right = previo.right
+      window.scrollTo(0, scrollY)
     }
-  }, [abierto, onCerrar])
+  }, [abierto])
 
   // Desmontar al cerrar es lo que garantiza que el contenido arranque limpio:
   // un formulario que sobrevive escondido conserva lo que se escribió la vez
@@ -84,7 +105,9 @@ export function Modal({
             <X className="size-5" aria-hidden />
           </button>
         </header>
-        <div className="area-segura-inferior flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="area-segura-inferior flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+          {children}
+        </div>
       </div>
     </div>
   )

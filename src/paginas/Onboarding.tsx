@@ -89,7 +89,11 @@ export function Onboarding() {
             <Boton
               variante="secundario"
               onClick={() => {
-                localStorage.setItem(CLAVE_ONBOARDING, '1')
+                // NO marcamos como visto: el usuario va a hacer lo que el
+                // paso le pide y va a volver. Si lo marcamos aquí, al
+                // regresar a / ya no aparece la sugerencia y se queda sin
+                // contexto. Solo `terminar` (botón "Empezar" del último
+                // paso) debe sellar el onboarding.
                 navigate(paso.cta!.ruta)
               }}
             >
