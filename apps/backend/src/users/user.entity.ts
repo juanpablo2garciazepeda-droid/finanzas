@@ -51,6 +51,15 @@ export class User {
   @Column({ name: 'password_actualizado_en', type: 'timestamptz', nullable: true })
   passwordActualizadoEn!: Date | null;
 
+  @Column({ name: 'idioma', type: 'varchar', length: 5, default: 'es' })
+  idioma!: string;
+
+  @Column({ name: 'recibir_digest', type: 'boolean', default: true })
+  recibirDigest!: boolean;
+
+  @Column({ name: 'ultimo_digest_en', type: 'timestamptz', nullable: true })
+  ultimoDigestEn!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 

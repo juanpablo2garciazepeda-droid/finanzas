@@ -21,6 +21,88 @@ const TINTA = '#1D1D1F'
 const SUAVE = '#86868B'
 const ACENTO = '#0071E3'
 
+/**
+ * Filtra transacciones por año (YYYY) y agrega por mes.
+ */
+function transaccionesDelAnio(transacciones: ContextoFinanciero['transacciones'], anio: number) {
+  return transacciones.filter((t) => t.fecha.startsWith(`${anio}-`))
+}
+
+export function generarReporteAnual(
+  ctx: ContextoFinanciero,
+  _pagos: PagoDeuda[],
+  anio: number,
+): jsPDF {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const { moneda, locale } = ctx.ajustes
+  const dinero = (c: number) => formatearMoneda(c, moneda, locale)
+
+  const delAnio = transaccionesDelAnio(ctx.transacciones, anio)
+  const porMes = new Map<string, { ingresos: number; egresos: number; cant: number }>()
+  for (let m = 1; m <= 12; m++) {
+    porMes.set(`${anio}-${String(m).padStart(2, '0')}`, { ingresos: 0, egresos: 0, cant: 0 })
+  }
+  for (const t of delAnio) {
+    const mes = t.fecha.slice(0, 7)
+    const slot = porMes.get(mes)
+    if (!slot) continue
+    if (t.tipo === 'ingreso') slot.ingresos += t.monto
+    else slot.egresos += t.monto
+    slot.cant++
+  }
+
+  const totIng = [...porMes.values()].reduce((a, m) => a + m.ingresos, 0)
+  const totEgr = [...porMes.values()].reduce((a, m) => a + m.egresos, 0)
+
+  doc.setFontSize(20)
+  doc.setTextColor(TINTA)
+  doc.text('Juanpa Finanzas', 40, 52)
+  doc.setFontSize(11)
+  doc.setTextColor(SUAVE)
+  doc.text(`Reporte anual ${anio}`, 40, 70)
+  doc.text(`Generado el ${formatearFecha(ctx.hoy, locale)}`, 40, 85)
+
+  autoTable(doc, {
+    startY: 105,
+    head: [['Resumen del año', '']],
+    body: [
+      ['Ingresos', dinero(totIng)],
+      ['Egresos', dinero(totEgr)],
+      ['Balance', dinero(totIng - totEgr)],
+      ['Deuda total actual', dinero(deudaTotal(ctx.deudas))],
+      ['Ahorro total actual', dinero(ahorroTotal(ctx.metas))],
+      ['Movimientos del año', String(delAnio.length)],
+    ],
+    theme: 'plain',
+    headStyles: { textColor: ACENTO, fontStyle: 'bold', fontSize: 12 },
+    bodyStyles: { textColor: TINTA, fontSize: 10 },
+    columnStyles: { 1: { halign: 'right', cellWidth: 130 } },
+  })
+
+  autoTable(doc, {
+    startY: (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable!.finalY + 24,
+    head: [['Mes', 'Ingresos', 'Egresos', 'Balance', 'Movs.']],
+    body: [...porMes.entries()].map(([mes, d]) => [
+      nombrePeriodo(mes),
+      dinero(d.ingresos),
+      dinero(d.egresos),
+      dinero(d.ingresos - d.egresos),
+      String(d.cant),
+    ]),
+    theme: 'striped',
+    headStyles: { fillColor: ACENTO, textColor: '#FFFFFF', fontSize: 10 },
+    bodyStyles: { textColor: TINTA, fontSize: 9 },
+    columnStyles: {
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+    },
+  })
+
+  return doc
+}
+
 export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[]): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const { moneda, locale } = ctx.ajustes
@@ -164,4 +246,8 @@ export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[
 
 export function descargarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[]) {
   generarReporteMensual(ctx, pagos).save(`juanpa-finanzas-${ctx.periodo}.pdf`)
+}
+
+export function descargarReporteAnual(ctx: ContextoFinanciero, pagos: PagoDeuda[], anio: number) {
+  generarReporteAnual(ctx, pagos, anio).save(`juanpa-finanzas-${anio}.pdf`)
 }

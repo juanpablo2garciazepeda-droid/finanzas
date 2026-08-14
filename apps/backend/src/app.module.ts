@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CategoriasModule } from './categorias/categorias.module';
@@ -12,6 +13,11 @@ import { DeudasModule } from './deudas/deudas.module';
 import { MetasModule } from './metas/metas.module';
 import { AjustesModule } from './ajustes/ajustes.module';
 import { AuditoriaModule } from './auditoria/auditoria.module';
+import { RecurrentesModule } from './recurrentes/recurrentes.module';
+import { ImportExportModule } from './transacciones/import-export.module';
+import { DigestModule } from './digest/digest.module';
+import { DigestService } from './digest/digest.service';
+import { EmailModule } from './auth/email.module';
 import { HealthModule } from './health/health.module';
 import { AuditoriaController } from './auditoria/auditoria.controller';
 import { ThrottlerBackendGuard } from './common/throttler-bypass.guard';
@@ -34,9 +40,15 @@ import { dataSourceOptions } from './database/data-source';
       { name: 'default', ttl: 60_000, limit: 100 },
       { name: 'auth', ttl: 60_000, limit: 10 },
     ]),
+    // Para el cron del digest semanal.
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     AuditoriaModule,
+    RecurrentesModule,
+    ImportExportModule,
+    DigestModule,
+    EmailModule,
     CategoriasModule,
     TransaccionesModule,
     PresupuestosModule,

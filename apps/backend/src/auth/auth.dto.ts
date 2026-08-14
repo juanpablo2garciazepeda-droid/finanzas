@@ -1,5 +1,7 @@
 import {
+  IsBoolean,
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -58,6 +60,17 @@ export class TokenDto {
   @IsString()
   @MinLength(20)
   token!: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(254)
+  nuevoEmail?: string;
+}
+
+export class CambiarCorreoDto {
+  @IsEmail()
+  @MaxLength(254)
+  nuevoEmail!: string;
 }
 
 export class CambiarPasswordDto {
@@ -81,6 +94,14 @@ export class ActualizarPerfilDto {
     message: 'displayName contiene caracteres no permitidos',
   })
   displayName?: string;
+
+  @IsOptional()
+  @IsIn(['es', 'en'])
+  idioma?: 'es' | 'en';
+
+  @IsOptional()
+  @IsBoolean()
+  recibirDigest?: boolean;
 }
 
 export class EliminarCuentaDto {

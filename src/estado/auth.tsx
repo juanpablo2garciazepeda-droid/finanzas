@@ -24,6 +24,8 @@ export interface Usuario {
   emailVerificado: boolean
   rol: 'usuario' | 'admin'
   debeCambiarPassword: boolean
+  idioma: 'es' | 'en'
+  recibirDigest: boolean
 }
 
 export interface AuthEstado {
@@ -58,6 +60,8 @@ interface PublicUserApi {
   emailVerificado: boolean
   rol: 'usuario' | 'admin'
   debeCambiarPassword: boolean
+  idioma: 'es' | 'en'
+  recibirDigest: boolean
   creadoEn: string
 }
 
@@ -76,6 +80,8 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
         emailVerificado: me.data.emailVerificado,
         rol: me.data.rol,
         debeCambiarPassword: me.data.debeCambiarPassword,
+        idioma: me.data.idioma ?? 'es',
+        recibirDigest: me.data.recibirDigest ?? true,
       })
       return true
     }
@@ -105,6 +111,14 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       if (!res.ok || !res.data) return { ok: false, error: res.error }
       guardarToken(res.data.accessToken, recordar)
       await hidratar()
+      // Si nunca vio el onboarding, lo mandamos a /bienvenida después
+      // de un instante. Lo hacemos con un timeout para no interferir con
+      // la respuesta del login.
+      if (localStorage.getItem('finanzas.onboarding.visto') !== '1') {
+        setTimeout(() => {
+          window.location.hash = '#/bienvenida'
+        }, 200)
+      }
       return { ok: true, error: null }
     },
     [hidratar],

@@ -76,13 +76,26 @@ export class UsersService {
 
   async actualizarPerfil(
     userId: string,
-    cambios: { displayName?: string },
+    cambios: { displayName?: string; idioma?: string; recibirDigest?: boolean },
   ): Promise<User> {
     const user = await this.findByIdOrThrow(userId);
     if (cambios.displayName !== undefined) {
       user.displayName = cambios.displayName;
     }
+    if (cambios.idioma !== undefined) {
+      user.idioma = cambios.idioma;
+    }
+    if (cambios.recibirDigest !== undefined) {
+      user.recibirDigest = cambios.recibirDigest;
+    }
     return this.users.save(user);
+  }
+
+  async actualizarCorreo(userId: string, nuevoEmail: string): Promise<void> {
+    await this.users.update(
+      { id: userId },
+      { email: nuevoEmail.toLowerCase(), emailVerificado: true, emailVerificadoEn: new Date() },
+    );
   }
 
   async eliminar(userId: string): Promise<void> {

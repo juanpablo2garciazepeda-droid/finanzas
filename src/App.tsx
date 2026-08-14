@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { ProveedorAuth, useAuth } from '@/estado/auth'
+import { ProveedorI18n } from '@/estado/i18n'
 import { Login } from '@/paginas/Login'
 import { VerificarEmail } from '@/paginas/VerificarEmail'
 import { OlvidePassword } from '@/paginas/OlvidePassword'
@@ -16,6 +17,8 @@ import { Presupuestos } from '@/paginas/Presupuestos'
 import { Deudas } from '@/paginas/Deudas'
 import { Metas } from '@/paginas/Metas'
 import { Ajustes } from '@/paginas/Ajustes'
+import { Recurrentes } from '@/paginas/Recurrentes'
+import { Onboarding, debeMostrarOnboarding } from '@/paginas/Onboarding'
 
 /**
  * `HashRouter` y no `BrowserRouter`: la app se sirve como archivos estáticos
@@ -52,13 +55,15 @@ function PuertaAutenticacion() {
   }
 
   return (
-    <ProveedorAvisos>
-      <ProveedorFinanzas>
-        <HashRouter>
-          <Contenido />
-        </HashRouter>
-      </ProveedorFinanzas>
-    </ProveedorAvisos>
+    <ProveedorI18n>
+      <ProveedorAvisos>
+        <ProveedorFinanzas>
+          <HashRouter>
+            <Contenido />
+          </HashRouter>
+        </ProveedorFinanzas>
+      </ProveedorAvisos>
+    </ProveedorI18n>
   )
 }
 
@@ -83,11 +88,13 @@ function Contenido() {
     <Disposicion>
       <Routes>
         <Route path="/" element={<Tablero />} />
+        <Route path="/bienvenida" element={debeMostrarOnboarding() ? <Onboarding /> : <Tablero />} />
         <Route path="/movimientos" element={<Movimientos />} />
         <Route path="/presupuestos" element={<Presupuestos />} />
         <Route path="/deudas" element={<Deudas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/ajustes" element={<Ajustes />} />
+        <Route path="/recurrentes" element={<Recurrentes />} />
         <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
         <Route path="*" element={<Tablero />} />
       </Routes>

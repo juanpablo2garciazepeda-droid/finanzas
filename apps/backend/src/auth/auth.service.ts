@@ -9,6 +9,8 @@ import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { EmailService } from './email.service';
+import { RecurrentesService } from '../recurrentes/recurrentes.service';
+import { DigestService } from '../digest/digest.service';
 import { TokenVerificacion } from './token-verificacion.entity';
 import { TokenResetPassword } from './token-reset-password.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -34,6 +36,8 @@ export interface PublicUser {
   emailVerificado: boolean;
   rol: 'usuario' | 'admin';
   debeCambiarPassword: boolean;
+  idioma: 'es' | 'en';
+  recibirDigest: boolean;
   creadoEn: string;
 }
 
@@ -48,6 +52,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly auditoria: AuditoriaService,
     private readonly email: EmailService,
+    private readonly recurrentes: RecurrentesService,
+    private readonly digest: DigestService,
     @InjectRepository(TokenVerificacion)
     private readonly tokensVerificacion: Repository<TokenVerificacion>,
     @InjectRepository(TokenResetPassword)
@@ -140,7 +146,96 @@ export class AuthService {
     return { mensaje };
   }
 
-  async verificarEmail(token: string, request?: Request): Promise<{ user: PublicUser }> {
+  /**
+   * Solicita cambio de correo: marca `email_pendiente` y envía un link de
+   * verificación al NUEVO correo. Si el usuario pica el link, el backend
+   * hace el swap y le marca como verificado.
+   */
+  async solicitarCambioCorreo(
+    userId: string,
+    nuevoEmail: string,
+    request?: Request,
+  ): Promise<{ mensaje: string }> {
+    const lower = nuevoEmail.toLowerCase()
+    const actual = await this.users.findById(userId)
+    if (!actual) throw new BadRequestException('Usuario no encontrado.')
+    if (lower === actual.email) {
+      throw new BadRequestException('Ese ya es tu correo actual.')
+    }
+    const existente = await this.users.findByEmail(lower)
+    if (existente) {
+      // Mensaje genérico: no confirmamos que el correo ya está en uso.
+      throw new BadRequestException(
+        'Si el correo está libre y es válido, te enviamos un enlace de verificación.',
+      )
+    }
+    const token = await this.crearTokenVerificacion(userId)
+    await this.enviarEmailCambioCorreo(actual, lower, token)
+    void this.auditoria.registrar({
+      usuarioId: userId,
+      emailIntento: lower,
+      accion: 'verificacion_email',
+      detalles: { motivo: 'cambio_correo', anterior: actual.email },
+      ip: this.ip(request),
+    })
+    return {
+      mensaje:
+        'Te enviamos un enlace al nuevo correo. Pícalo para confirmar el cambio.',
+    }
+  }
+
+  private async enviarEmailCambioCorreo(
+    user: User,
+    nuevoEmail: string,
+    token: string,
+  ): Promise<void> {
+    const link = `${APP_URL}/#/verificar-email?token=${encodeURIComponent(token)}&cambio=1`
+    const texto = [
+      `Hola${user.displayName ? ` ${user.displayName}` : ''},`,
+      '',
+      `Recibimos una solicitud para cambiar el correo de tu cuenta a ${nuevoEmail}.`,
+      'Si fuiste tú, confirma aquí (expira en 24 horas):',
+      link,
+      '',
+      'Si no fuiste tú, ignora este mensaje: tu correo no cambia.',
+    ].join('\n')
+    const html = `
+      <p>Hola${user.displayName ? ` <strong>${escapeHtml(user.displayName)}</strong>` : ''},</p>
+      <p>Recibimos una solicitud para cambiar el correo de tu cuenta a <strong>${escapeHtml(nuevoEmail)}</strong>.</p>
+      <p>Si fuiste tú, confirma aquí (expira en 24 horas):</p>
+      <p><a href="${link}">${link}</a></p>
+      <p style="color:#666;font-size:13px">Si no fuiste tú, ignora este mensaje: tu correo no cambia.</p>
+    `
+    await this.email.enviar({ para: nuevoEmail, asunto: 'Confirma tu nuevo correo', texto, html })
+  }
+
+  /**
+   * Si el token de verificación trae `?cambio=1` y el usuario tiene
+   * un `email_pendiente` distinto, hace el swap.
+   */
+  async aplicarCambioCorreoSiProcede(
+    userId: string,
+    nuevoEmail: string,
+  ): Promise<void> {
+    const user = await this.users.findById(userId)
+    if (!user) return
+    if (nuevoEmail === user.email) return
+    // Verificamos que nadie más lo haya tomado en el interín.
+    const conflicto = await this.users.findByEmail(nuevoEmail)
+    if (conflicto) return
+    await this.users.actualizarCorreo(userId, nuevoEmail)
+    void this.auditoria.registrar({
+      usuarioId: userId,
+      emailIntento: nuevoEmail,
+      accion: 'actualizacion_perfil',
+      detalles: { campos: ['email'], anterior: user.email },
+    })
+  }
+
+  async verificarEmail(
+    token: string,
+    options: { nuevoEmail?: string; request?: Request } = {},
+  ): Promise<{ user: PublicUser; cambioAplicado: boolean }> {
     const hash = this.hashToken(token);
     const fila = await this.tokensVerificacion.findOne({ where: { tokenHash: hash } });
 
@@ -152,17 +247,32 @@ export class AuthService {
       { id: fila.id },
       { usadoEn: new Date() },
     );
+
+    // Si la verificación trae un nuevo email pendiente, hacemos el swap.
+    let cambioAplicado = false;
+    if (options.nuevoEmail) {
+      const lower = options.nuevoEmail.toLowerCase();
+      const actual = await this.users.findById(fila.usuarioId);
+      if (actual && lower !== actual.email) {
+        const conflicto = await this.users.findByEmail(lower);
+        if (!conflicto) {
+          await this.users.actualizarCorreo(fila.usuarioId, lower);
+          cambioAplicado = true;
+        }
+      }
+    }
     await this.users.marcarEmailVerificado(fila.usuarioId);
     const user = await this.users.findByIdOrThrow(fila.usuarioId);
 
     void this.auditoria.registrar({
       usuarioId: user.id,
-      emailIntento: user.email,
+      emailIntento: options.nuevoEmail ?? user.email,
       accion: 'verificacion_email',
-      ip: this.ip(request),
+      detalles: cambioAplicado ? { motivo: 'cambio_correo' } : undefined,
+      ip: this.ip(options.request),
     });
 
-    return { user: this.toPublic(user) };
+    return { user: this.toPublic(user), cambioAplicado };
   }
 
   private async crearTokenVerificacion(usuarioId: string): Promise<string> {
@@ -242,7 +352,34 @@ export class AuthService {
       userAgent: this.ua(request),
     });
 
+    // Hooks post-login (best-effort, no rompen el flujo):
+    //  - procesar recurrentes que tocan este mes
+    //  - enviar digest semanal si toca
+    void this.ejecutarHooksPostLogin(user.id)
+
     return this.issue(user);
+  }
+
+  private async ejecutarHooksPostLogin(userId: string): Promise<void> {
+    try {
+      const hoy = new Date().toISOString().slice(0, 10)
+      const r = await this.recurrentes.ejecutarPendientes(userId, hoy)
+      if (r.generadas > 0) {
+        void this.auditoria.registrar({
+          usuarioId: userId,
+          accion: 'actualizacion_perfil',
+          detalles: { motivo: 'recurrentes_generados', cantidad: r.generadas },
+        })
+      }
+    } catch {
+      // best-effort
+    }
+    try {
+      const u = await this.users.findById(userId)
+      if (u) await this.digest.enviarSiToca(u)
+    } catch {
+      // best-effort
+    }
   }
 
   // ── Olvidé / restablecer password ───────────────────────────────────────
@@ -474,6 +611,8 @@ export class AuthService {
       emailVerificado: user.emailVerificado,
       rol: user.rol,
       debeCambiarPassword: user.debeCambiarPassword,
+      idioma: (user.idioma as 'es' | 'en') || 'es',
+      recibirDigest: user.recibirDigest ?? true,
       creadoEn: user.createdAt.toISOString(),
     };
   }

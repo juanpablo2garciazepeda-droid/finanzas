@@ -18,12 +18,13 @@ import type {
   AporteMeta,
   Categoria,
   Deuda,
+  GastoRecurrente,
   Meta,
   PagoDeuda,
   Presupuesto,
   Transaccion,
 } from '@/dominio/tipos'
-import { api } from '@/api/cliente'
+import { API_URL as API_URL_BACK, api, obtenerToken as obtenerTokenLocal } from '@/api/cliente'
 
 // ─── Conversores bigint ─────────────────────────────────────────────────────
 
@@ -600,3 +601,133 @@ export async function reordenarMetas(idsEnOrden: string[]): Promise<void> {
     await api.patch(`/metas/${id}`, { prioridad: indice + 1 })
   }
 }
+
+// ─── Recurrentes ──────────────────────────────────────────────────────────
+
+interface ApiRecurrente {
+  id: string
+  userId: string
+  tipo: 'ingreso' | 'egreso'
+  monto: string | number
+  categoriaId: string
+  metodoPago: 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'otro'
+  nota: string
+  diaDelMes: number
+  iniciaEn: string
+  terminaEn: string | null
+  activo: boolean
+  ultimoGeneradoEn: string | null
+}
+
+function recurrenteDeApi(r: ApiRecurrente): GastoRecurrente {
+  return {
+    id: r.id,
+    tipo: r.tipo,
+    monto: aNumero(r.monto),
+    categoriaId: r.categoriaId,
+    metodoPago: r.metodoPago,
+    nota: r.nota,
+    diaDelMes: r.diaDelMes,
+    iniciaEn: r.iniciaEn,
+    terminaEn: r.terminaEn,
+    activo: r.activo,
+    ultimoGeneradoEn: r.ultimoGeneradoEn,
+  }
+}
+
+export async function listarRecurrentes(): Promise<GastoRecurrente[]> {
+  const res = await api.get<ApiRecurrente[]>('/recurrentes')
+  if (!res.ok || !res.data) return []
+  return res.data.map(recurrenteDeApi)
+}
+
+export async function crearRecurrente(input: Omit<GastoRecurrente, 'id' | 'ultimoGeneradoEn'>): Promise<GastoRecurrente> {
+  const res = await api.post<ApiRecurrente>('/recurrentes', {
+    tipo: input.tipo,
+    monto: aStringBigInt(input.monto),
+    categoriaId: input.categoriaId,
+    metodoPago: input.metodoPago,
+    nota: input.nota,
+    diaDelMes: input.diaDelMes,
+    iniciaEn: input.iniciaEn,
+    terminaEn: input.terminaEn,
+    activo: input.activo,
+  })
+  if (!res.ok || !res.data) throw new Error(res.error ?? 'No se pudo crear el recurrente')
+  return recurrenteDeApi(res.data)
+}
+
+export async function actualizarRecurrente(
+  id: string,
+  input: Partial<Omit<GastoRecurrente, 'id'>>,
+): Promise<GastoRecurrente> {
+  const cuerpo: Record<string, unknown> = {}
+  if (input.tipo !== undefined) cuerpo.tipo = input.tipo
+  if (input.monto !== undefined) cuerpo.monto = aStringBigInt(input.monto)
+  if (input.categoriaId !== undefined) cuerpo.categoriaId = input.categoriaId
+  if (input.metodoPago !== undefined) cuerpo.metodoPago = input.metodoPago
+  if (input.nota !== undefined) cuerpo.nota = input.nota
+  if (input.diaDelMes !== undefined) cuerpo.diaDelMes = input.diaDelMes
+  if (input.iniciaEn !== undefined) cuerpo.iniciaEn = input.iniciaEn
+  if (input.terminaEn !== undefined) cuerpo.terminaEn = input.terminaEn
+  if (input.activo !== undefined) cuerpo.activo = input.activo
+  const res = await api.patch<ApiRecurrente>(`/recurrentes/${id}`, cuerpo)
+  if (!res.ok || !res.data) throw new Error(res.error ?? 'No se pudo actualizar')
+  return recurrenteDeApi(res.data)
+}
+
+export async function eliminarRecurrente(id: string): Promise<void> {
+  await api.delete(`/recurrentes/${id}`)
+}
+
+// ─── Importar / Exportar mis datos ─────────────────────────────────────────
+
+export interface ExportarDatos {
+  generadoEn: string
+  usuario: { email: string; displayName: string; idioma: string; creadoEn: string }
+  categorias: unknown[]
+  transacciones: unknown[]
+  presupuestos: unknown[]
+  deudas: unknown[]
+  pagos: unknown[]
+  metas: unknown[]
+  aportes: unknown[]
+  ajustes: unknown
+  recurrentes: unknown[]
+}
+
+export async function exportarMisDatos(): Promise<ExportarDatos> {
+  const res = await api.get<ExportarDatos>('/datos/exportar')
+  if (!res.ok || !res.data) throw new Error(res.error ?? 'No se pudo exportar')
+  return res.data
+}
+
+export interface ResultadoImportar {
+  insertadas: number
+  categoriasCreadas: string[]
+  errores: string[]
+}
+
+export async function importarMovimientosCsv(archivo: File): Promise<ResultadoImportar> {
+  const fd = new FormData()
+  fd.append('archivo', archivo)
+  const token = obtenerTokenLocal()
+  const res = await fetch(`${API_URL_BACK}/datos/importar-csv`, {
+    method: 'POST',
+    body: fd,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  const texto = await res.text()
+  let data: unknown = null
+  if (texto) {
+    try { data = JSON.parse(texto) } catch { data = texto }
+  }
+  if (!res.ok) {
+    const errBody = data as { message?: string } | null
+    throw new Error(errBody?.message ?? `HTTP ${res.status}`)
+  }
+  return data as ResultadoImportar
+}
+
+// Helpers para el importador (no expuesto en el `api` principal porque
+// requiere multipart, no JSON).

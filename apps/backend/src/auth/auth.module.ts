@@ -4,10 +4,12 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from '../users/users.module';
 import { AuditoriaModule } from '../auditoria/auditoria.module';
+import { RecurrentesModule } from '../recurrentes/recurrentes.module';
+import { DigestModule } from '../digest/digest.module';
+import { EmailModule } from './email.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
-import { EmailService } from './email.service';
 import { TokenVerificacion } from './token-verificacion.entity';
 import { TokenResetPassword } from './token-reset-password.entity';
 
@@ -15,6 +17,9 @@ import { TokenResetPassword } from './token-reset-password.entity';
   imports: [
     UsersModule,
     AuditoriaModule,
+    RecurrentesModule,
+    DigestModule,
+    EmailModule,
     PassportModule,
     TypeOrmModule.forFeature([TokenVerificacion, TokenResetPassword]),
     JwtModule.register({
@@ -22,7 +27,7 @@ import { TokenResetPassword } from './token-reset-password.entity';
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN ?? '30d' },
     }),
   ],
-  providers: [AuthService, JwtStrategy, EmailService],
+  providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
   exports: [AuthService],
 })

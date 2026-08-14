@@ -1,5 +1,19 @@
-import { useState } from 'react'
-import { Download, Eye, EyeOff, LogOut, Pencil, Plus, ShieldOff, Trash2, X } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  Download,
+  Eye,
+  EyeOff,
+  FileDown,
+  FileUp,
+  LogOut,
+  Pencil,
+  Plus,
+  Repeat,
+  ShieldOff,
+  Trash2,
+  X,
+} from 'lucide-react'
 import type { Acento, Categoria, TipoMovimiento } from '@/dominio/tipos'
 import { aCentavos, formatearMoneda } from '@/dominio/dinero'
 import { nombrePeriodo } from '@/dominio/fechas'
@@ -9,13 +23,16 @@ import {
   actualizarCategoria,
   crearCategoria,
   eliminarCategoria,
+  exportarMisDatos,
   guardarAjustes,
+  importarMovimientosCsv,
 } from '@/datos/repositorio'
 import { api } from '@/api/cliente'
 import { useAuth } from '@/estado/auth'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
 import { hayNotificaciones, pedirPermiso } from '@/estado/recordatorios'
+import { useI18n } from '@/estado/i18n'
 import { MUESTRA_ACENTO, NOMBRE_TEMA, useEsOscuro } from '@/estado/tema'
 import { CampoFecha } from '@/componentes/ui/CampoFecha'
 import { Boton, Campo, Entrada, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
@@ -24,6 +41,7 @@ import { Segmentado } from '@/componentes/ui/Segmentado'
 import { SelectorColor, SelectorIcono } from '@/componentes/ui/Selectores'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
 import { descargarMovimientosCSV } from '@/exportar/csv'
+import { descargarReporteAnual } from '@/exportar/pdf'
 
 const MONEDAS = [
   { codigo: 'MXN', locale: 'es-MX', etiqueta: 'Peso mexicano (MXN)' },
@@ -40,15 +58,19 @@ export function Ajustes() {
     useFinanzas()
   const { mostrar } = useAvisos()
   const { usuario, cerrarSesion, refrescar: refrescarAuth } = useAuth()
+  const i18n = useI18n()
   const esOscuro = useEsOscuro()
   const [editandoCategoria, setEditandoCategoria] = useState<Categoria | 'nueva' | undefined>()
   const [borrandoCategoria, setBorrandoCategoria] = useState<Categoria | undefined>()
   const [generandoPDF, setGenerandoPDF] = useState(false)
   const [editandoNombre, setEditandoNombre] = useState(false)
   const [cambiandoPassword, setCambiandoPassword] = useState(false)
+  const [cambiandoCorreo, setCambiandoCorreo] = useState(false)
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
   const [confirmandoLogoutAll, setConfirmandoLogoutAll] = useState(false)
   const [reenviandoVerificacion, setReenviandoVerificacion] = useState(false)
+  const [exportando, setExportando] = useState(false)
+  const [importando, setImportando] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -101,6 +123,9 @@ export function Ajustes() {
               <Pencil className="size-4" aria-hidden />
               Editar nombre
             </Boton>
+            <Boton variante="secundario" onClick={() => setCambiandoCorreo(true)}>
+              Cambiar correo
+            </Boton>
             <Boton variante="secundario" onClick={() => setCambiandoPassword(true)}>
               Cambiar contraseña
             </Boton>
@@ -108,6 +133,119 @@ export function Ajustes() {
               <LogOut className="size-4" aria-hidden />
               Cerrar sesión en todos lados
             </Boton>
+          </div>
+        </Tarjeta>
+      </section>
+
+      <section>
+        <TituloSeccion>Automatización</TituloSeccion>
+        <Tarjeta>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-tinta">Gastos e ingresos recurrentes</p>
+              <p className="mt-0.5 text-[13px] text-tenue">
+                Crea plantillas (Netflix, la renta, tu sueldo…) y se agregan solas cada mes.
+              </p>
+            </div>
+            <Link
+              to="/recurrentes"
+              className="inline-flex items-center gap-2 rounded-full border border-borde bg-elevada px-4 py-2 text-[15px] text-acento transition-colors hover:bg-hundida"
+            >
+              <Repeat className="size-4" aria-hidden />
+              Administrar
+            </Link>
+          </div>
+        </Tarjeta>
+      </section>
+
+      <section>
+        <TituloSeccion>Tus datos</TituloSeccion>
+        <Tarjeta className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-tinta">Exportar todos mis datos</p>
+              <p className="mt-0.5 text-[13px] text-tenue">
+                Descarga una copia completa (categorías, movimientos, deudas, metas, recurrentes,
+                ajustes) en formato JSON. Lo que la ley te garantiza tener.
+              </p>
+            </div>
+            <Boton
+              variante="secundario"
+              disabled={exportando}
+              onClick={async () => {
+                setExportando(true)
+                try {
+                  const datos = await exportarMisDatos()
+                  const blob = new Blob([JSON.stringify(datos, null, 2)], {
+                    type: 'application/json',
+                  })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `juanpa-finanzas-${new Date().toISOString().slice(0, 10)}.json`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                  mostrar('Descarga iniciada')
+                } catch (err) {
+                  mostrar(err instanceof Error ? err.message : 'No se pudo exportar', 'error')
+                } finally {
+                  setExportando(false)
+                }
+              }}
+            >
+              <FileDown className="size-4" aria-hidden />
+              {exportando ? 'Exportando…' : 'Exportar todo'}
+            </Boton>
+          </div>
+
+          <div className="border-t border-borde pt-3">
+            <label className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-tinta">Importar movimientos desde CSV</p>
+                <p className="mt-0.5 text-[13px] text-tenue">
+                  Columnas: <code className="rounded bg-elevada px-1">fecha, tipo, monto, categoria, metodoPago, nota</code>.
+                  Las categorías nuevas se crean al vuelo.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  id="importar-csv"
+                  onChange={async (e) => {
+                    const archivo = e.target.files?.[0]
+                    if (!archivo) return
+                    setImportando(true)
+                    try {
+                      const r = await importarMovimientosCsv(archivo)
+                      mostrar(
+                        `Listo: ${r.insertadas} movimientos. ${r.categoriasCreadas.length} categorías nuevas.`,
+                      )
+                      if (r.errores.length > 0) {
+                        mostrar(`${r.errores.length} filas con error. Revisa la consola.`, 'error')
+                        // eslint-disable-next-line no-console
+                        console.warn('Errores de importación:', r.errores)
+                      }
+                      await refrescar()
+                    } catch (err) {
+                      mostrar(err instanceof Error ? err.message : 'No se pudo importar', 'error')
+                    } finally {
+                      setImportando(false)
+                      e.target.value = ''
+                    }
+                  }}
+                />
+                <Boton
+                  variante="secundario"
+                  disabled={importando}
+                  onClick={() => document.getElementById('importar-csv')?.click()}
+                >
+                  <FileUp className="size-4" aria-hidden />
+                  {importando ? 'Importando…' : 'Elegir archivo'}
+                </Boton>
+              </span>
+            </label>
           </div>
         </Tarjeta>
       </section>
@@ -130,6 +268,17 @@ export function Ajustes() {
           onGuardado={() => {
             setCambiandoPassword(false)
             mostrar('Contraseña actualizada. En otros dispositivos se cerró la sesión.')
+          }}
+        />
+      )}
+
+      {cambiandoCorreo && (
+        <CambiarCorreo
+          correoActual={usuario?.email ?? ''}
+          onCerrar={() => setCambiandoCorreo(false)}
+          onEnviado={() => {
+            setCambiandoCorreo(false)
+            mostrar('Te enviamos un enlace al nuevo correo. Pícalo para confirmar.')
           }}
         />
       )}
@@ -212,6 +361,22 @@ export function Ajustes() {
       <section>
         <TituloSeccion>Apariencia</TituloSeccion>
         <Tarjeta className="space-y-5">
+          <div>
+            <span className="mb-2 block text-[13px] font-medium text-suave">Idioma</span>
+            <Segmentado
+              etiqueta="Idioma"
+              valor={i18n.idioma}
+              onCambiar={(v) => void i18n.setIdioma(v as 'es' | 'en')}
+              opciones={[
+                { valor: 'es', etiqueta: 'Español' },
+                { valor: 'en', etiqueta: 'English' },
+              ]}
+            />
+            <p className="mt-1.5 text-[13px] text-tenue">
+              Algunas cadenas aún no están traducidas; seguimos en ello.
+            </p>
+          </div>
+
           <div>
             <span className="mb-2 block text-[13px] font-medium text-suave">Tema</span>
             <Segmentado
@@ -360,7 +525,7 @@ export function Ajustes() {
 
       <section>
         <TituloSeccion>Recordatorios de pago</TituloSeccion>
-        <Tarjeta>
+        <Tarjeta className="space-y-3">
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
@@ -382,7 +547,7 @@ export function Ajustes() {
               className="mt-0.5 size-4 accent-acento"
             />
             <span>
-              <span className="block text-sm text-tinta">Avisarme de pagos próximos</span>
+              <span className="block text-sm text-tinta">Avisarme de pagos próximos (en el navegador)</span>
               <span className="mt-1 block text-xs text-tenue">
                 {hayNotificaciones()
                   ? 'El aviso llega la primera vez que abres la app cada día, no a una hora fija.'
@@ -390,6 +555,31 @@ export function Ajustes() {
               </span>
             </span>
           </label>
+
+          {usuario && (
+            <label className="flex items-start gap-3 border-t border-borde pt-3">
+              <input
+                type="checkbox"
+                checked={usuario.recibirDigest}
+                onChange={async (e) => {
+                  const r = await api.patch<{ user: { recibirDigest: boolean } }>('/auth/perfil', {
+                    recibirDigest: e.target.checked,
+                  })
+                  if (r.ok) {
+                    await refrescarAuth()
+                    mostrar(e.target.checked ? 'Te enviaremos el resumen' : 'No te enviaremos el resumen')
+                  }
+                }}
+                className="mt-0.5 size-4 accent-acento"
+              />
+              <span>
+                <span className="block text-sm text-tinta">Resumen semanal por correo</span>
+                <span className="mt-1 block text-xs text-tenue">
+                  Cada lunes con tus ingresos, gastos y deuda de la semana anterior.
+                </span>
+              </span>
+            </label>
+          )}
         </Tarjeta>
       </section>
 
@@ -478,6 +668,18 @@ export function Ajustes() {
             >
               <Download className="size-4" aria-hidden />
               {generandoPDF ? 'Generando…' : 'Reporte PDF del mes'}
+            </Boton>
+            <Boton
+              variante="secundario"
+              disabled={!hayMovimientos}
+              onClick={() => {
+                const anio = Number(periodo.slice(0, 4))
+                descargarReporteAnual(ctx, pagos, anio)
+                mostrar(`Reporte ${anio} descargado`)
+              }}
+            >
+              <Download className="size-4" aria-hidden />
+              Reporte anual PDF
             </Boton>
             <Boton
               variante="secundario"
@@ -994,6 +1196,70 @@ function EliminarCuenta({
           </Boton>
           <Boton variante="peligro" type="submit" disabled={!listo || eliminando}>
             {eliminando ? 'Eliminando…' : 'Eliminar definitivamente'}
+          </Boton>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function CambiarCorreo({
+  correoActual,
+  onCerrar,
+  onEnviado,
+}: {
+  correoActual: string
+  onCerrar: () => void
+  onEnviado: () => void
+}) {
+  const { mostrar } = useAvisos()
+  const [nuevo, setNuevo] = useState('')
+  const [enviando, setEnviando] = useState(false)
+
+  const listo = /\S+@\S+\.\S+/.test(nuevo) && nuevo.toLowerCase() !== correoActual.toLowerCase()
+
+  async function enviar(e: FormEvent) {
+    e.preventDefault()
+    if (!listo) return
+    setEnviando(true)
+    const res = await api.post<{ mensaje: string }>('/auth/cambiar-correo', {
+      nuevoEmail: nuevo.trim(),
+    })
+    setEnviando(false)
+    if (!res.ok) {
+      mostrar(res.error ?? 'No se pudo solicitar el cambio', 'error')
+      return
+    }
+    onEnviado()
+  }
+
+  return (
+    <Modal abierto onCerrar={onCerrar} titulo="Cambiar correo">
+      <p className="text-[14px] text-suave">
+        Te enviaremos un enlace de verificación al <strong>nuevo</strong> correo. Tu correo actual
+        no cambia hasta que piques ese enlace.
+      </p>
+      <form onSubmit={enviar} className="mt-4 space-y-4">
+        <Campo etiqueta="Correo actual" htmlFor="correo-actual">
+          <Entrada id="correo-actual" type="email" value={correoActual} disabled />
+        </Campo>
+        <Campo etiqueta="Correo nuevo" htmlFor="correo-nuevo">
+          <Entrada
+            id="correo-nuevo"
+            type="email"
+            value={nuevo}
+            onChange={(e) => setNuevo(e.target.value)}
+            placeholder="nuevo@correo.com"
+            autoComplete="email"
+            required
+          />
+        </Campo>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Boton variante="fantasma" type="button" onClick={onCerrar}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" disabled={!listo || enviando}>
+            {enviando ? 'Enviando…' : 'Enviar enlace'}
           </Boton>
         </div>
       </form>

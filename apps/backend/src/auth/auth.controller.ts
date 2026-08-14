@@ -16,6 +16,7 @@ import { Request } from 'express';
 import { AuthService } from './auth.service';
 import {
   CambiarPasswordDto,
+  CambiarCorreoDto,
   LoginDto,
   OlvidePasswordDto,
   RegisterDto,
@@ -61,7 +62,10 @@ export class AuthController {
   @Post('verificar-email')
   @HttpCode(HttpStatus.OK)
   verificarEmail(@Body() body: TokenDto, @Req() req: Request) {
-    return this.auth.verificarEmail(body.token, req);
+    return this.auth.verificarEmail(body.token, {
+      nuevoEmail: body.nuevoEmail,
+      request: req,
+    });
   }
 
   @Post('reenviar-verificacion')
@@ -109,6 +113,18 @@ export class AuthController {
     @Req() req: Request,
   ) {
     return this.auth.actualizarPerfil(user.sub, body, req);
+  }
+
+  @Post('cambiar-correo')
+  @UseGuards(AuthGuard('jwt'))
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  cambiarCorreo(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: CambiarCorreoDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.solicitarCambioCorreo(user.sub, body.nuevoEmail, req);
   }
 
   @Post('logout-all')

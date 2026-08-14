@@ -21,6 +21,26 @@ export type Tema = 'claro' | 'oscuro' | 'sistema'
 
 export type Acento = 'azul' | 'morado' | 'rosa' | 'naranja' | 'verde' | 'grafito'
 
+export type Idioma = 'es' | 'en'
+
+/** Plantilla de transacción que se genera sola cada mes. */
+export interface GastoRecurrente {
+  id: string
+  tipo: TipoMovimiento
+  /** Centavos */
+  monto: number
+  categoriaId: string
+  metodoPago: MetodoPago
+  nota: string
+  /** 1-28 */
+  diaDelMes: number
+  iniciaEn: string
+  terminaEn: string | null
+  activo: boolean
+  /** YYYY-MM-DD de la última vez que se generó la transacción automática. */
+  ultimoGeneradoEn: string | null
+}
+
 export interface Categoria {
   id: string
   nombre: string
