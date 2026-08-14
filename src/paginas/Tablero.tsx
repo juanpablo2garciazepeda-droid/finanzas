@@ -10,8 +10,6 @@ import { ahorroTotal } from '@/dominio/metas'
 import { gastoPorCategoria, transaccionesDelPeriodo } from '@/dominio/presupuestos'
 import { generarRecomendaciones } from '@/dominio/recomendaciones'
 import { calcularSalud, serieDeudaYAhorro, serieHistorica } from '@/dominio/salud'
-import { cargarDatosDemo } from '@/datos/demo'
-import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
 import { MedidorMargen } from '@/componentes/MedidorMargen'
 import { SimuladorGasto } from '@/componentes/SimuladorGasto'
@@ -310,21 +308,6 @@ function Esqueleto() {
 }
 
 function Bienvenida() {
-  const { mostrar } = useAvisos()
-  const [cargando, setCargando] = useState(false)
-
-  async function cargar() {
-    setCargando(true)
-    try {
-      await cargarDatosDemo()
-      mostrar('Listo, cargué cuatro meses de ejemplo')
-    } catch {
-      mostrar('No se pudieron cargar los datos de ejemplo', 'error')
-    } finally {
-      setCargando(false)
-    }
-  }
-
   return (
     <div className="mx-auto max-w-md py-10 text-center">
       <h1 className="font-display text-3xl font-semibold tracking-tight text-tinta">
@@ -332,7 +315,7 @@ function Bienvenida() {
       </h1>
       <p className="mt-3 text-suave">
         Juanpa Finanzas calcula cuánto te queda de verdad después de tus deudas y tus metas, y te dice si ese
-        gasto cabe. Todo se guarda en este dispositivo.
+        gasto cabe.
       </p>
 
       <div className="mt-8 space-y-3 text-left">
@@ -353,9 +336,9 @@ function Bienvenida() {
         ))}
       </div>
 
-      <Boton variante="secundario" onClick={() => void cargar()} disabled={cargando} className="mt-6">
-        {cargando ? 'Cargando…' : 'Ver la app con datos de ejemplo'}
-      </Boton>
+      <p className="mt-6 text-[13px] text-tenue">
+        Empieza con el botón <span className="cifras font-semibold">+</span> de abajo a la derecha.
+      </p>
     </div>
   )
 }

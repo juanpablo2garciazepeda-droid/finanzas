@@ -1,5 +1,4 @@
-import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
   Ajustes,
   AporteMeta,
@@ -12,11 +11,11 @@ import type {
 } from '@/dominio/tipos'
 import type { ContextoFinanciero } from '@/dominio/alertas'
 import { hoyISO, periodoActual } from '@/dominio/fechas'
-import { AJUSTES_INICIALES, ID_AJUSTES, db } from '@/datos/db'
-import { inicializar } from '@/datos/repositorio'
+import { cargarTodo } from '@/datos/repositorio'
 
 export interface EstadoFinanzas {
   cargando: boolean
+  error: string | null
   hoy: string
   /** Periodo que se está viendo. Puede no ser el mes en curso. */
   periodo: string
@@ -40,18 +39,30 @@ export interface EstadoFinanzas {
    * de bienvenida como si no hubiera hecho nada.
    */
   hayDatos: boolean
+  /** Vuelve a traer todo del backend. Útil tras una mutación. */
+  refrescar: () => Promise<void>
 }
 
 const Contexto = createContext<EstadoFinanzas | null>(null)
 
 export function ProveedorFinanzas({ children }: { children: ReactNode }) {
   const [listo, setListo] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [datos, setDatos] = useState<Awaited<ReturnType<typeof cargarTodo>> | null>(null)
   const [periodo, setPeriodo] = useState(periodoActual)
   const [hoy, setHoy] = useState(hoyISO)
 
-  useEffect(() => {
-    inicializar().then(() => setListo(true))
+  const refrescar = useCallback(async () => {
+    setError(null)
+    const r = await cargarTodo()
+    setDatos(r)
   }, [])
+
+  useEffect(() => {
+    refrescar()
+      .catch((e) => setError(e instanceof Error ? e.message : 'No se pudo cargar'))
+      .finally(() => setListo(true))
+  }, [refrescar])
 
   // Si la app se queda abierta cruzando la medianoche, "hoy" tiene que moverse.
   useEffect(() => {
@@ -62,32 +73,19 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
     return () => clearInterval(id)
   }, [])
 
-  const datos = useLiveQuery(async () => {
-    const [ajustes, categorias, transacciones, presupuestos, deudas, pagos, metas, aportes] =
-      await Promise.all([
-        db.ajustes.get(ID_AJUSTES),
-        db.categorias.orderBy('orden').toArray(),
-        db.transacciones.toArray(),
-        db.presupuestos.toArray(),
-        db.deudas.toArray(),
-        db.pagosDeuda.toArray(),
-        db.metas.orderBy('prioridad').toArray(),
-        db.aportesMeta.toArray(),
-      ])
-    return { ajustes, categorias, transacciones, presupuestos, deudas, pagos, metas, aportes }
-  }, [listo])
-
   const valor = useMemo<EstadoFinanzas>(() => {
-    const ajustes = datos?.ajustes ?? AJUSTES_INICIALES
+    const ajustes = datos?.ajustes ?? ajustesPorDefecto()
     const categorias = datos?.categorias ?? []
     const transacciones = datos?.transacciones ?? []
     const presupuestos = datos?.presupuestos ?? []
     const deudas = datos?.deudas ?? []
     const metas = datos?.metas ?? []
     const aportes = datos?.aportes ?? []
+    const pagos = datos?.pagos ?? []
 
     return {
-      cargando: !listo || datos === undefined,
+      cargando: !listo,
+      error,
       hoy,
       periodo,
       irAPeriodo: setPeriodo,
@@ -98,7 +96,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
       transacciones,
       presupuestos,
       deudas,
-      pagos: datos?.pagos ?? [],
+      pagos,
       metas,
       aportes,
       ctx: {
@@ -109,7 +107,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         transacciones,
         presupuestos,
         deudas,
-        pagos: datos?.pagos ?? [],
+        pagos,
         metas,
         aportes,
       },
@@ -121,8 +119,9 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         presupuestos.length > 0 ||
         ajustes.ingresoMensual > 0 ||
         ajustes.saldoInicial > 0,
+      refrescar,
     }
-  }, [datos, listo, periodo, hoy])
+  }, [datos, listo, error, periodo, hoy, refrescar])
 
   return <Contexto value={valor}>{children}</Contexto>
 }
@@ -137,4 +136,22 @@ export function useFinanzas(): EstadoFinanzas {
 export function useFormato() {
   const { ajustes } = useFinanzas()
   return useMemo(() => ({ moneda: ajustes.moneda, locale: ajustes.locale }), [ajustes])
+}
+
+function ajustesPorDefecto(): Ajustes {
+  return {
+    id: 'unico',
+    moneda: 'MXN',
+    locale: 'es-MX',
+    ingresoMensual: 0,
+    cicloPago: 'quincenal',
+    saldoInicial: 0,
+    saldoInicialFecha: '',
+    tema: 'sistema',
+    acento: 'azul',
+    diasAvisoVencimiento: 7,
+    umbralPrecaucion: 0.8,
+    notificacionesActivas: false,
+    ultimaRevisionVencimientos: '',
+  }
 }

@@ -32,7 +32,7 @@ import { SelectorIcono } from '@/componentes/ui/Selectores'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
 
 export function Metas() {
-  const { metas, aportes, ajustes, hoy } = useFinanzas()
+  const { metas, aportes, ajustes, hoy, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const [creando, setCreando] = useState(false)
   const [editando, setEditando] = useState<Meta | undefined>()
@@ -52,6 +52,7 @@ export function Metas() {
     if (destino < 0 || destino >= orden.length) return
     ;[orden[indice], orden[destino]] = [orden[destino], orden[indice]]
     await reordenarMetas([...orden, ...completadas.map((m) => m.id)])
+    await refrescar()
   }
 
   return (
@@ -237,7 +238,9 @@ export function Metas() {
         onCerrar={() => setBorrando(undefined)}
         onConfirmar={() => {
           if (!borrando) return
-          void eliminarMeta(borrando.id).then(() => mostrar(`Eliminé la meta ${borrando.nombre}`))
+          void eliminarMeta(borrando.id)
+            .then(() => refrescar())
+            .then(() => mostrar(`Eliminé la meta ${borrando.nombre}`))
         }}
         titulo="Eliminar meta"
         mensaje={borrando ? `Se borran ${borrando.nombre} y todos sus aportes. Esto no se puede deshacer.` : ''}
@@ -257,7 +260,7 @@ function FormularioMeta({
   siguientePrioridad: number
   onCerrar: () => void
 }) {
-  const { ajustes, hoy } = useFinanzas()
+  const { ajustes, hoy, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
 
   const [nombre, setNombre] = useState(editando?.nombre ?? '')
@@ -301,9 +304,11 @@ function FormularioMeta({
     }
     if (editando) {
       await actualizarMeta(editando.id, datos)
+      await refrescar()
       mostrar(`Meta actualizada: apartas ${dinero(aporteMensual)} al mes`)
     } else {
       await crearMeta({ ...datos, prioridad: siguientePrioridad, montoActual: aCentavos(inicial) })
+      await refrescar()
       mostrar(`Creé ${datos.nombre}: ${dinero(aporteMensual)} al mes`)
     }
     onCerrar()
@@ -427,7 +432,7 @@ function FormularioMeta({
 }
 
 function FormularioAporte({ meta, onCerrar }: { meta: Meta; onCerrar: () => void }) {
-  const { ajustes } = useFinanzas()
+  const { ajustes, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const [monto, setMonto] = useState(meta.aporteMensual > 0 ? String(meta.aporteMensual / 100) : '')
   const [fecha, setFecha] = useState(hoyISO)
@@ -439,6 +444,7 @@ function FormularioAporte({ meta, onCerrar }: { meta: Meta; onCerrar: () => void
   async function guardar() {
     if (centavos <= 0) return
     await registrarAporte(meta.id, centavos, fecha, nota.trim())
+    await refrescar()
     const nuevo = meta.montoActual + centavos
     mostrar(
       nuevo >= meta.montoObjetivo
@@ -495,7 +501,7 @@ function FormularioAporte({ meta, onCerrar }: { meta: Meta; onCerrar: () => void
 }
 
 function HistorialAportes({ meta, onCerrar }: { meta: Meta; onCerrar: () => void }) {
-  const { aportes, ajustes } = useFinanzas()
+  const { aportes, ajustes, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const mios = [...aportesDeMeta(aportes, meta.id)].sort((a, b) => b.fecha.localeCompare(a.fecha))
 
@@ -517,9 +523,9 @@ function HistorialAportes({ meta, onCerrar }: { meta: Meta; onCerrar: () => void
               <button
                 type="button"
                 onClick={() => {
-                  void eliminarAporte(aporte.id).then(() =>
-                    mostrar('Aporte eliminado y saldo recalculado', 'info'),
-                  )
+                  void eliminarAporte(aporte.id)
+                    .then(() => refrescar())
+                    .then(() => mostrar('Aporte eliminado y saldo recalculado', 'info'))
                 }}
                 aria-label="Eliminar aporte"
                 className="rounded-full p-1.5 text-tenue transition-colors hover:bg-rojo/10 hover:text-rojo"

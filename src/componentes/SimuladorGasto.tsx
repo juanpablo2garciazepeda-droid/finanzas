@@ -23,7 +23,7 @@ const CLAVE_METODO = 'finanzas.ultimoMetodo'
  * volver a teclear el monto.
  */
 export function SimuladorGasto({ onCerrar }: { onCerrar: () => void }) {
-  const { ctx, categoriasActivas, ajustes } = useFinanzas()
+  const { ctx, categoriasActivas, ajustes, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const [monto, setMonto] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
@@ -61,6 +61,7 @@ export function SimuladorGasto({ onCerrar }: { onCerrar: () => void }) {
         metodoPago: (localStorage.getItem(CLAVE_METODO) as MetodoPago | null) ?? 'debito',
         nota: '',
       })
+      await refrescar()
       mostrar(`Gasto de ${formatearMoneda(centavos, ajustes.moneda, ajustes.locale)} registrado`)
       onCerrar()
     } catch {

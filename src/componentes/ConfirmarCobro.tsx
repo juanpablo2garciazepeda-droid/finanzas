@@ -21,7 +21,7 @@ const CLAVE_APLAZADO = 'finanzas.cobroAplazado'
  * la respuesta convierte la estimación en un movimiento de verdad.
  */
 export function ConfirmarCobro({ margen }: { margen: Margen }) {
-  const { categoriasActivas, ajustes, hoy } = useFinanzas()
+  const { categoriasActivas, ajustes, hoy, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const [guardando, setGuardando] = useState(false)
   const [aplazado, setAplazado] = useState(
@@ -55,6 +55,7 @@ export function ConfirmarCobro({ margen }: { margen: Margen }) {
         metodoPago: 'transferencia',
         nota: 'Cobro registrado desde el tablero',
       })
+      await refrescar()
       mostrar(`Listo, ${texto} entraron a tu ${margen.ciclo.nombre}`)
     } catch {
       mostrar('No se pudo registrar tu cobro', 'error')

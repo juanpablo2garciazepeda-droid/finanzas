@@ -97,6 +97,8 @@ export function FormularioMovimiento({
 
   const puedeGuardar = centavos > 0 && categoriaId !== '' && !guardando
 
+  const { refrescar } = useFinanzas()
+
   async function guardar() {
     if (!puedeGuardar) return
     setGuardando(true)
@@ -111,6 +113,7 @@ export function FormularioMovimiento({
         const texto = formatearMoneda(centavos, ajustes.moneda, ajustes.locale)
         mostrar(tipo === 'egreso' ? `Gasto de ${texto} registrado` : `Ingreso de ${texto} registrado`)
       }
+      await refrescar()
       onCerrar()
     } catch {
       mostrar('No se pudo guardar el movimiento', 'error')

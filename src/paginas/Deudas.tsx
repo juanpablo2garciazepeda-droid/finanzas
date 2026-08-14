@@ -47,7 +47,7 @@ import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
 import { PERIODICIDAD } from '@/exportar/etiquetas'
 
 export function Deudas() {
-  const { deudas, pagos, ajustes, hoy } = useFinanzas()
+  const { deudas, pagos, ajustes, hoy, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const [creando, setCreando] = useState(false)
   const [editando, setEditando] = useState<Deuda | undefined>()
@@ -191,9 +191,9 @@ export function Deudas() {
         onCerrar={() => setBorrando(undefined)}
         onConfirmar={() => {
           if (!borrando) return
-          void eliminarDeuda(borrando.id).then(() =>
-            mostrar(`Eliminé ${borrando.acreedor} y su historial de pagos`),
-          )
+          void eliminarDeuda(borrando.id)
+            .then(() => refrescar())
+            .then(() => mostrar(`Eliminé ${borrando.acreedor} y su historial de pagos`))
         }}
         titulo="Eliminar deuda"
         mensaje={
@@ -315,7 +315,7 @@ function FichaDeuda({
 const PLAZOS_SUGERIDOS = [3, 6, 9, 12, 18, 24, 36, 48]
 
 function FormularioDeuda({ editando, onCerrar }: { editando?: Deuda; onCerrar: () => void }) {
-  const { ajustes } = useFinanzas()
+  const { ajustes, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
 
   // El estado inicial vive en el propio useState. Como el componente se monta al
@@ -361,9 +361,11 @@ function FormularioDeuda({ editando, onCerrar }: { editando?: Deuda; onCerrar: (
     }
     if (editando) {
       await actualizarDeuda(editando.id, datos)
+      await refrescar()
       mostrar('Deuda actualizada')
     } else {
       await crearDeuda(datos)
+      await refrescar()
       mostrar(`Registré ${datos.acreedor}: ${dinero(mensual)} al mes`)
     }
     onCerrar()
@@ -559,7 +561,7 @@ function FormularioDeuda({ editando, onCerrar }: { editando?: Deuda; onCerrar: (
 }
 
 function FormularioPago({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => void }) {
-  const { ajustes } = useFinanzas()
+  const { ajustes, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const [monto, setMonto] = useState(
     deuda.pagoMinimo > 0 ? String(Math.min(deuda.pagoMinimo, deuda.saldoActual) / 100) : '',
@@ -572,7 +574,8 @@ function FormularioPago({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => voi
 
   async function guardar() {
     if (centavos <= 0) return
-    await registrarPago(deuda.id, centavos, fecha, nota.trim(), avanzar)
+    await registrarPago(deuda.id, centavos, fecha, nota.trim())
+    await refrescar()
     const restante = Math.max(0, deuda.saldoActual - centavos)
     mostrar(
       restante === 0
@@ -641,7 +644,7 @@ function FormularioPago({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => voi
 }
 
 function HistorialPagos({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => void }) {
-  const { pagos, ajustes } = useFinanzas()
+  const { pagos, ajustes, refrescar } = useFinanzas()
   const { mostrar } = useAvisos()
   const mios = [...pagosDeDeuda(pagos, deuda.id)].sort((a, b) => b.fecha.localeCompare(a.fecha))
 
@@ -663,7 +666,9 @@ function HistorialPagos({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => voi
               <button
                 type="button"
                 onClick={() => {
-                  void eliminarPago(pago.id).then(() => mostrar('Abono eliminado y saldo recalculado', 'info'))
+                  void eliminarPago(pago.id)
+                    .then(() => refrescar())
+                    .then(() => mostrar('Abono eliminado y saldo recalculado', 'info'))
                 }}
                 aria-label="Eliminar abono"
                 className="rounded-full p-1.5 text-tenue transition-colors hover:bg-rojo/10 hover:text-rojo"

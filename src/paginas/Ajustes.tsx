@@ -1,34 +1,28 @@
-import { useRef, useState } from 'react'
-import { Download, LockKeyhole, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { useState } from 'react'
+import { Download, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Acento, Categoria, TipoMovimiento } from '@/dominio/tipos'
 import { aCentavos, formatearMoneda } from '@/dominio/dinero'
-import { hoyISO, nombrePeriodo } from '@/dominio/fechas'
+import { nombrePeriodo } from '@/dominio/fechas'
 import { NOMBRE_CICLO } from '@/dominio/ciclos'
 import { PALETA } from '@/datos/categoriasIniciales'
 import {
   actualizarCategoria,
-  borrarTodo,
   crearCategoria,
   eliminarCategoria,
-  exportarRespaldo,
   guardarAjustes,
-  importarRespaldo,
-  type Respaldo,
 } from '@/datos/repositorio'
-import { cargarDatosDemo } from '@/datos/demo'
+import { useAuth } from '@/estado/auth'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
 import { hayNotificaciones, pedirPermiso } from '@/estado/recordatorios'
 import { MUESTRA_ACENTO, NOMBRE_TEMA, useEsOscuro } from '@/estado/tema'
-import { fijarPin, hayPin, quitarPin } from '@/estado/bloqueo'
-import { FormularioPin } from '@/componentes/PantallaBloqueo'
 import { CampoFecha } from '@/componentes/ui/CampoFecha'
 import { Boton, Campo, Entrada, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
 import { Segmentado } from '@/componentes/ui/Segmentado'
 import { SelectorColor, SelectorIcono } from '@/componentes/ui/Selectores'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
-import { descargar, descargarMovimientosCSV } from '@/exportar/csv'
+import { descargarMovimientosCSV } from '@/exportar/csv'
 
 const MONEDAS = [
   { codigo: 'MXN', locale: 'es-MX', etiqueta: 'Peso mexicano (MXN)' },
@@ -41,29 +35,33 @@ const MONEDAS = [
 ]
 
 export function Ajustes() {
-  const { ajustes, categorias, transacciones, ctx, pagos, periodo, hayMovimientos } = useFinanzas()
+  const { ajustes, categorias, transacciones, ctx, pagos, periodo, hayMovimientos, refrescar } =
+    useFinanzas()
   const { mostrar } = useAvisos()
+  const { usuario, cerrarSesion } = useAuth()
   const esOscuro = useEsOscuro()
-  const archivo = useRef<HTMLInputElement>(null)
   const [editandoCategoria, setEditandoCategoria] = useState<Categoria | 'nueva' | undefined>()
   const [borrandoCategoria, setBorrandoCategoria] = useState<Categoria | undefined>()
-  const [borrandoTodo, setBorrandoTodo] = useState(false)
   const [generandoPDF, setGenerandoPDF] = useState(false)
-  const [editandoPin, setEditandoPin] = useState(false)
-  const [pinActivo, setPinActivo] = useState(hayPin)
-
-  async function importar(entrada: File) {
-    try {
-      const respaldo = JSON.parse(await entrada.text()) as Respaldo
-      await importarRespaldo(respaldo)
-      mostrar('Respaldo restaurado')
-    } catch (error) {
-      mostrar(error instanceof Error ? error.message : 'El archivo no es un respaldo válido', 'error')
-    }
-  }
 
   return (
     <div className="space-y-6">
+      <section>
+        <TituloSeccion>Tu cuenta</TituloSeccion>
+        <Tarjeta className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-tinta">{usuario?.email}</p>
+            <p className="mt-0.5 text-[13px] text-tenue">
+              Sesión guardada en este navegador. Al cerrar sesión se borra la llave local.
+            </p>
+          </div>
+          <Boton variante="secundario" onClick={cerrarSesion}>
+            <LogOut className="size-4" aria-hidden />
+            Cerrar sesión
+          </Boton>
+        </Tarjeta>
+      </section>
+
       <section>
         <TituloSeccion>Moneda y formato</TituloSeccion>
         <Tarjeta className="space-y-4">
@@ -149,8 +147,6 @@ export function Ajustes() {
           <CampoSaldo
             valor={ajustes.saldoInicial}
             fecha={ajustes.saldoInicialFecha}
-            moneda={ajustes.moneda}
-            locale={ajustes.locale}
           />
           <p className="text-[13px] text-tenue">
             Es una foto, no un dato que la app pueda adivinar. A partir de ella suma tus ingresos y
@@ -242,49 +238,6 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Bloqueo</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          {pinActivo ? (
-            <>
-              <p className="text-[15px] text-tinta">
-                La app pide un PIN de 4 dígitos al abrirse en este dispositivo.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Boton variante="secundario" onClick={() => setEditandoPin(true)}>
-                  Cambiar PIN
-                </Boton>
-                <Boton
-                  variante="peligro"
-                  onClick={() => {
-                    quitarPin()
-                    setPinActivo(false)
-                    mostrar('Quité el PIN; la app ya no lo pedirá', 'info')
-                  }}
-                >
-                  Quitar PIN
-                </Boton>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-[15px] text-suave">
-                Pon un PIN para que quien tome tu teléfono no vea tus finanzas.
-              </p>
-              <Boton variante="secundario" onClick={() => setEditandoPin(true)}>
-                <LockKeyhole className="size-4" aria-hidden />
-                Activar PIN
-              </Boton>
-            </>
-          )}
-          <p className="text-[13px] text-tenue">
-            Es un candado de pantalla, no una cuenta: no hay servidor que valide nada y los datos
-            siguen guardados sin cifrar en este navegador. Sirve contra miradas ajenas, no contra
-            alguien decidido con acceso al dispositivo.
-          </p>
-        </Tarjeta>
-      </section>
-
-      <section>
         <TituloSeccion>Recordatorios de pago</TituloSeccion>
         <Tarjeta>
           <label className="flex items-start gap-3">
@@ -311,7 +264,7 @@ export function Ajustes() {
               <span className="block text-sm text-tinta">Avisarme de pagos próximos</span>
               <span className="mt-1 block text-xs text-tenue">
                 {hayNotificaciones()
-                  ? 'La app no tiene servidor, así que el aviso llega la primera vez que la abres cada día, no a una hora fija.'
+                  ? 'El aviso llega la primera vez que abres la app cada día, no a una hora fija.'
                   : 'Este navegador no soporta notificaciones.'}
               </span>
             </span>
@@ -423,91 +376,6 @@ export function Ajustes() {
         </Tarjeta>
       </section>
 
-      <section>
-        <TituloSeccion>Respaldo</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          <p className="text-sm text-suave">
-            Tus datos viven solo en este navegador. Si borras los datos del sitio o cambias de dispositivo, se
-            van contigo únicamente si haces respaldo.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Boton
-              variante="secundario"
-              onClick={async () => {
-                const respaldo = await exportarRespaldo()
-                descargar(
-                  JSON.stringify(respaldo, null, 2),
-                  `juanpa-finanzas-respaldo-${respaldo.generado.slice(0, 10)}.json`,
-                  'application/json',
-                )
-                mostrar('Respaldo descargado')
-              }}
-            >
-              <Download className="size-4" aria-hidden />
-              Descargar respaldo
-            </Boton>
-            <Boton variante="secundario" onClick={() => archivo.current?.click()}>
-              <Upload className="size-4" aria-hidden />
-              Restaurar respaldo
-            </Boton>
-            <input
-              ref={archivo}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(e) => {
-                const elegido = e.target.files?.[0]
-                if (elegido) void importar(elegido)
-                e.target.value = ''
-              }}
-            />
-          </div>
-          <p className="text-xs text-tenue">Restaurar reemplaza todo lo que hay ahora.</p>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>Zona de riesgo</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          {!hayMovimientos && (
-            <Boton
-              variante="secundario"
-              onClick={async () => {
-                await cargarDatosDemo()
-                mostrar('Cargué cuatro meses de ejemplo')
-              }}
-            >
-              Cargar datos de ejemplo
-            </Boton>
-          )}
-          <Boton variante="peligro" onClick={() => setBorrandoTodo(true)}>
-            <Trash2 className="size-4" aria-hidden />
-            Borrar todos mis datos
-          </Boton>
-        </Tarjeta>
-      </section>
-
-      {editandoPin && (
-        <Modal
-          abierto
-          onCerrar={() => setEditandoPin(false)}
-          titulo={pinActivo ? 'Cambiar PIN' : 'Activar PIN'}
-          ancho="sm:max-w-sm"
-        >
-          <FormularioPin
-            onCancelar={() => setEditandoPin(false)}
-            onGuardar={(pin) => {
-              void fijarPin(pin).then(() => {
-                setPinActivo(true)
-                setEditandoPin(false)
-                mostrar('PIN activado; te lo pediré la próxima vez que abras la app')
-              })
-            }}
-          />
-        </Modal>
-      )}
-
-      {/* Se monta al abrirse para que no arrastre la categoría anterior. */}
       {editandoCategoria && (
         <EditorCategoria
           valor={editandoCategoria}
@@ -521,14 +389,19 @@ export function Ajustes() {
         onCerrar={() => setBorrandoCategoria(undefined)}
         onConfirmar={() => {
           if (!borrandoCategoria) return
-          void eliminarCategoria(borrandoCategoria.id).then((resultado) =>
-            mostrar(
-              resultado === 'archivada'
-                ? `${borrandoCategoria.nombre} tiene movimientos, así que la archivé en vez de borrarla`
-                : `Eliminé ${borrandoCategoria.nombre}`,
-              'info',
-            ),
-          )
+          void eliminarCategoria(borrandoCategoria.id)
+            .then((resultado) => {
+              void refrescar()
+              return resultado
+            })
+            .then((resultado) =>
+              mostrar(
+                resultado === 'archivada'
+                  ? `${borrandoCategoria.nombre} tiene movimientos, así que la archivé en vez de borrarla`
+                  : `Eliminé ${borrandoCategoria.nombre}`,
+                'info',
+              ),
+            )
         }}
         titulo="Eliminar categoría"
         mensaje={
@@ -536,17 +409,6 @@ export function Ajustes() {
             ? `Si ${borrandoCategoria.nombre} tiene movimientos registrados, se archiva en lugar de borrarse para no dejar tu historial incompleto.`
             : ''
         }
-      />
-
-      <ConfirmarBorrado
-        abierto={borrandoTodo}
-        onCerrar={() => setBorrandoTodo(false)}
-        onConfirmar={() => {
-          void borrarTodo().then(() => mostrar('Listo, la app quedó como recién instalada', 'info'))
-        }}
-        titulo="Borrar todos mis datos"
-        mensaje="Se borran movimientos, presupuestos, deudas y metas de este dispositivo. Descarga un respaldo antes si quieres poder volver."
-        textoBoton="Borrar todo"
       />
     </div>
   )
@@ -561,6 +423,7 @@ function EditorCategoria({
   onCerrar: () => void
   onGuardado: (nombre: string) => void
 }) {
+  const { refrescar } = useFinanzas()
   const editando = valor !== 'nueva' ? valor : undefined
   // El componente se monta al abrirse, así que el estado inicial basta: nunca
   // arrastra lo que se capturó en la categoría anterior.
@@ -576,6 +439,7 @@ function EditorCategoria({
     } else {
       await crearCategoria({ nombre: nombre.trim(), tipo, icono, color })
     }
+    await refrescar()
     onGuardado(nombre.trim())
     onCerrar()
   }
@@ -634,6 +498,7 @@ function CampoIngreso({
   locale: string
 }) {
   const { mostrar } = useAvisos()
+  const { refrescar } = useFinanzas()
   const [texto, setTexto] = useState(valor > 0 ? String(valor / 100) : '')
   const [guardando, setGuardando] = useState(false)
 
@@ -645,6 +510,7 @@ function CampoIngreso({
     setGuardando(true)
     try {
       await guardarAjustes({ ingresoMensual: centavos })
+      await refrescar()
       mostrar(
         centavos > 0
           ? `Listo: cuento con ${formatearMoneda(centavos, moneda, locale, { conDecimales: false })} al mes`
@@ -694,72 +560,57 @@ function CampoIngreso({
 function CampoSaldo({
   valor,
   fecha,
-  moneda,
-  locale,
 }: {
   valor: number
   fecha: string
-  moneda: string
-  locale: string
 }) {
   const { mostrar } = useAvisos()
-  const [texto, setTexto] = useState(valor > 0 ? String(valor / 100) : '')
-  const [dia, setDia] = useState(fecha || hoyISO())
+  const [monto, setMonto] = useState(valor > 0 ? String(valor / 100) : '')
+  const [fechaSaldo, setFechaSaldo] = useState(fecha)
   const [guardando, setGuardando] = useState(false)
 
-  const centavos = aCentavos(texto)
-  const cambio = centavos !== valor || dia !== fecha
+  const centavos = aCentavos(monto)
+  const cambio = centavos !== valor || fechaSaldo !== fecha
 
   async function guardar() {
     if (!cambio) return
     setGuardando(true)
     try {
-      await guardarAjustes({ saldoInicial: centavos, saldoInicialFecha: centavos > 0 ? dia : '' })
-      mostrar(
-        centavos > 0
-          ? `Listo: parto de ${formatearMoneda(centavos, moneda, locale, { conDecimales: false })}`
-          : 'Quité tu saldo; volveré a calcular solo con entradas y salidas',
-      )
+      await guardarAjustes({ saldoInicial: centavos, saldoInicialFecha: fechaSaldo })
+      mostrar('Saldo guardado')
     } catch {
-      mostrar('No se pudo guardar tu saldo', 'error')
+      mostrar('No se pudo guardar el saldo', 'error')
     } finally {
       setGuardando(false)
     }
   }
 
   return (
-    <div className="space-y-3">
-      <Campo
-        etiqueta="¿Cuánto tienes ahora en el banco y en efectivo?"
-        ayuda="Súmalo todo: cuenta, tarjeta de débito y efectivo."
-        htmlFor="saldo"
-      >
-        <div className="flex max-w-sm items-center gap-2">
-          <Entrada
-            id="saldo"
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void guardar()
-              }
-            }}
-            inputMode="decimal"
-            placeholder="0.00"
-            className="cifras text-lg"
-          />
-          <Boton onClick={() => void guardar()} disabled={!cambio || guardando} className="shrink-0">
-            {guardando ? 'Guardando…' : cambio ? 'Guardar' : 'Guardado'}
-          </Boton>
-        </div>
-      </Campo>
-
-      <div className="max-w-[16rem]">
-        <Campo etiqueta="¿De qué día es ese saldo?" htmlFor="saldoFecha">
-          <CampoFecha id="saldoFecha" valor={dia} onCambio={setDia} max={hoyISO()} locale={locale} />
-        </Campo>
+    <Campo
+      etiqueta="Saldo disponible a esta fecha"
+      ayuda="Una foto, no un cálculo. Úsalo la primera vez y cuando quieras recalibrar."
+      htmlFor="saldo"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Entrada
+          id="saldo"
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void guardar()
+            }
+          }}
+          inputMode="decimal"
+          placeholder="0.00"
+          className="cifras w-40 text-lg"
+        />
+        <CampoFecha valor={fechaSaldo} onCambio={setFechaSaldo} />
+        <Boton onClick={() => void guardar()} disabled={!cambio || guardando} className="shrink-0">
+          {guardando ? 'Guardando…' : cambio ? 'Guardar' : 'Guardado'}
+        </Boton>
       </div>
-    </div>
+    </Campo>
   )
 }

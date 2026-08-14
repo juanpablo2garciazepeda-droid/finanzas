@@ -16,7 +16,8 @@ import { Icono } from '@/componentes/ui/Icono'
 import { Modal } from '@/componentes/ui/Modal'
 
 export function Presupuestos() {
-  const { ctx, categoriasActivas, presupuestos, transacciones, periodo, ajustes } = useFinanzas()
+  const { ctx, categoriasActivas, presupuestos, transacciones, periodo, ajustes, refrescar } =
+    useFinanzas()
   const { mostrar } = useAvisos()
   const [editando, setEditando] = useState<{ categoriaId: string | null; nombre: string; limite: number } | null>(null)
 
@@ -45,6 +46,7 @@ export function Presupuestos() {
 
   async function copiar() {
     const copiados = await copiarPresupuestos(anterior, periodo)
+    await refrescar()
     mostrar(
       copiados > 0
         ? `Copié ${copiados} ${copiados === 1 ? 'presupuesto' : 'presupuestos'} de ${nombrePeriodo(anterior)}`
@@ -229,11 +231,13 @@ function EditorPresupuesto({
   onCerrar: () => void
   onGuardado: (nombre: string, limite: number) => void
 }) {
+  const { refrescar } = useFinanzas()
   const [monto, setMonto] = useState(editando.limite > 0 ? String(editando.limite / 100) : '')
 
   async function guardar() {
     const centavos = aCentavos(monto)
     await fijarPresupuesto(editando.categoriaId, periodo, centavos)
+    await refrescar()
     onGuardado(editando.nombre, centavos)
     onCerrar()
   }

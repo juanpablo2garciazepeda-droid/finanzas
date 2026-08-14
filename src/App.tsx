@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
-import { hayPin, sesionAbierta, vigilarSegundoPlano } from '@/estado/bloqueo'
-import { PantallaBloqueo } from '@/componentes/PantallaBloqueo'
+import { ProveedorAuth, useAuth } from '@/estado/auth'
+import { Login } from '@/paginas/Login'
 import { ProveedorAvisos } from '@/estado/avisos'
 import { ProveedorFinanzas } from '@/estado/finanzas'
 import { useRecordatorios } from '@/estado/recordatorios'
@@ -19,13 +18,25 @@ import { Ajustes } from '@/paginas/Ajustes'
  * sin servidor que reescriba rutas, recargar en /deudas daría 404.
  */
 export default function App() {
-  // El candado va por fuera de los datos: si está echado, la app ni siquiera
-  // monta el proveedor que lee IndexedDB.
-  const [bloqueada, setBloqueada] = useState(() => hayPin() && !sesionAbierta())
+  return (
+    <ProveedorAuth>
+      <PuertaAutenticacion />
+    </ProveedorAuth>
+  )
+}
 
-  useEffect(() => vigilarSegundoPlano(() => setBloqueada(true)), [])
+function PuertaAutenticacion() {
+  const auth = useAuth()
 
-  if (bloqueada) return <PantallaBloqueo onEntrar={() => setBloqueada(false)} />
+  if (auth.iniciando) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-fondo">
+        <p className="text-suave">Cargando…</p>
+      </div>
+    )
+  }
+
+  if (!auth.autenticado) return <Login />
 
   return (
     <ProveedorAvisos>
