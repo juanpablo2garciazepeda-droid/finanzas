@@ -19,8 +19,12 @@ import { dataSourceOptions } from './database/data-source';
 
 /**
  * Throttler: limites por defecto y específicos para auth.
- *   · default 100 req / 60s por IP — suficiente para la app normal.
- *   · auth  lo ajustan los @Throttle() en los controllers.
+ *   · default 100 req / 60s por IP — la app normal.
+ *   · auth 10/60s — login/register/olvide (los @Throttle en controllers
+ *     sobreescriben estos valores en cada ruta).
+ *
+ * `default` aplica a todas las rutas; las sensibles se saltan el rate
+ * limit con @SkipThrottle (ej. /health).
  */
 @Module({
   imports: [
@@ -29,7 +33,6 @@ import { dataSourceOptions } from './database/data-source';
     ThrottlerModule.forRoot([
       { name: 'default', ttl: 60_000, limit: 100 },
       { name: 'auth', ttl: 60_000, limit: 10 },
-      { name: 'auth-estricto', ttl: 3_600_000, limit: 5 },
     ]),
     AuthModule,
     UsersModule,
