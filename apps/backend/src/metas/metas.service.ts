@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { Meta } from './meta.entity';
 import { AporteMeta } from './aporte-meta.entity';
 import { AuthCrudService } from '../common/auth-crud.controller';
@@ -28,8 +28,8 @@ export class MetasService extends AuthCrudService<Meta> {
   }
 
   /** Override: completa defaults NOT NULL (montoActual, prioridad, completada). */
-  async create(userId: string, input: Partial<Meta>): Promise<Meta> {
-    const payload: Partial<Meta> = { ...input, userId }
+  async create(userId: string, input: DeepPartial<Meta>): Promise<Meta> {
+    const payload: DeepPartial<Meta> = { ...input, userId }
     if (payload.montoActual === undefined) payload.montoActual = '0'
     if (payload.prioridad === undefined) payload.prioridad = 1
     if (payload.completada === undefined) payload.completada = false

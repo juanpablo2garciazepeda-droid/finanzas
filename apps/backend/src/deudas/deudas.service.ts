@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { Deuda } from './deuda.entity';
 import { PagoDeuda } from './pago-deuda.entity';
 import { AuthCrudService } from '../common/auth-crud.controller';
@@ -31,8 +31,8 @@ export class DeudasService extends AuthCrudService<Deuda> {
    * Override del create genérico: si no llega saldoActual, lo iguala a
    * montoOriginal; la columna es NOT NULL y el frontend a veces omite el campo.
    */
-  async create(userId: string, input: Partial<Deuda>): Promise<Deuda> {
-    const payload: Partial<Deuda> = { ...input, userId }
+  async create(userId: string, input: DeepPartial<Deuda>): Promise<Deuda> {
+    const payload: DeepPartial<Deuda> = { ...input, userId }
     if (payload.saldoActual === undefined || payload.saldoActual === null) {
       payload.saldoActual = payload.montoOriginal ?? '0'
     }
