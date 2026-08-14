@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, LogOut, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Download, Eye, EyeOff, LogOut, Pencil, Plus, ShieldOff, Trash2, X } from 'lucide-react'
 import type { Acento, Categoria, TipoMovimiento } from '@/dominio/tipos'
 import { aCentavos, formatearMoneda } from '@/dominio/dinero'
 import { nombrePeriodo } from '@/dominio/fechas'
@@ -11,6 +11,7 @@ import {
   eliminarCategoria,
   guardarAjustes,
 } from '@/datos/repositorio'
+import { api } from '@/api/cliente'
 import { useAuth } from '@/estado/auth'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
@@ -38,27 +39,147 @@ export function Ajustes() {
   const { ajustes, categorias, transacciones, ctx, pagos, periodo, hayMovimientos, refrescar } =
     useFinanzas()
   const { mostrar } = useAvisos()
-  const { usuario, cerrarSesion } = useAuth()
+  const { usuario, cerrarSesion, refrescar: refrescarAuth } = useAuth()
   const esOscuro = useEsOscuro()
   const [editandoCategoria, setEditandoCategoria] = useState<Categoria | 'nueva' | undefined>()
   const [borrandoCategoria, setBorrandoCategoria] = useState<Categoria | undefined>()
   const [generandoPDF, setGenerandoPDF] = useState(false)
+  const [editandoNombre, setEditandoNombre] = useState(false)
+  const [cambiandoPassword, setCambiandoPassword] = useState(false)
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
+  const [confirmandoLogoutAll, setConfirmandoLogoutAll] = useState(false)
+  const [reenviandoVerificacion, setReenviandoVerificacion] = useState(false)
 
   return (
     <div className="space-y-6">
       <section>
         <TituloSeccion>Tu cuenta</TituloSeccion>
-        <Tarjeta className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm text-tinta">{usuario?.email}</p>
-            <p className="mt-0.5 text-[13px] text-tenue">
-              Sesión guardada en este navegador. Al cerrar sesión se borra la llave local.
-            </p>
+        <Tarjeta className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-tinta">{usuario?.email}</p>
+              <p className="mt-0.5 text-[13px] text-tenue">{usuario?.displayName || 'Sin nombre'}</p>
+              {usuario && !usuario.emailVerificado && (
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-ambar/10 px-2 py-0.5 text-[12px] text-ambar">
+                  <X className="size-3" aria-hidden />
+                  Correo sin verificar
+                </p>
+              )}
+              {usuario?.emailVerificado && (
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-verde/10 px-2 py-0.5 text-[12px] text-verde">
+                  <ShieldOff className="size-3 -scale-x-100" aria-hidden />
+                  Correo verificado
+                </p>
+              )}
+            </div>
+            <Boton variante="secundario" onClick={cerrarSesion}>
+              <LogOut className="size-4" aria-hidden />
+              Cerrar sesión
+            </Boton>
           </div>
-          <Boton variante="secundario" onClick={cerrarSesion}>
-            <LogOut className="size-4" aria-hidden />
-            Cerrar sesión
-          </Boton>
+
+          {usuario && !usuario.emailVerificado && (
+            <Boton
+              variante="fantasma"
+              disabled={reenviandoVerificacion}
+              onClick={async () => {
+                setReenviandoVerificacion(true)
+                const res = await api.post('/auth/reenviar-verificacion', {
+                  email: usuario.email,
+                })
+                setReenviandoVerificacion(false)
+                mostrar(res.ok ? 'Te reenviamos el correo de verificación' : (res.error ?? 'No se pudo reenviar'))
+              }}
+              className="w-full sm:w-auto"
+            >
+              {reenviandoVerificacion ? 'Enviando…' : 'Reenviar correo de verificación'}
+            </Boton>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Boton variante="secundario" onClick={() => setEditandoNombre(true)}>
+              <Pencil className="size-4" aria-hidden />
+              Editar nombre
+            </Boton>
+            <Boton variante="secundario" onClick={() => setCambiandoPassword(true)}>
+              Cambiar contraseña
+            </Boton>
+            <Boton variante="secundario" onClick={() => setConfirmandoLogoutAll(true)}>
+              <LogOut className="size-4" aria-hidden />
+              Cerrar sesión en todos lados
+            </Boton>
+          </div>
+        </Tarjeta>
+      </section>
+
+      {editandoNombre && usuario && (
+        <EditarNombre
+          inicial={usuario.displayName}
+          onCerrar={() => setEditandoNombre(false)}
+          onGuardado={async () => {
+            await refrescarAuth()
+            mostrar('Nombre actualizado')
+            setEditandoNombre(false)
+          }}
+        />
+      )}
+
+      {cambiandoPassword && (
+        <CambiarPassword
+          onCerrar={() => setCambiandoPassword(false)}
+          onGuardado={() => {
+            setCambiandoPassword(false)
+            mostrar('Contraseña actualizada. En otros dispositivos se cerró la sesión.')
+          }}
+        />
+      )}
+
+      {confirmandoLogoutAll && (
+        <ConfirmarAccion
+          abierto
+          titulo="¿Cerrar sesión en todos tus dispositivos?"
+          mensaje="Cerraremos tu cuenta en todos los navegadores y teléfonos donde la tengas abierta. Aquí también te vamos a pedir volver a iniciar sesión."
+          textoConfirmar="Sí, cerrar todas"
+          textoCancelar="Cancelar"
+          onCerrar={() => setConfirmandoLogoutAll(false)}
+          onConfirmar={async () => {
+            const res = await api.post<{ mensaje: string }>('/auth/logout-all')
+            setConfirmandoLogoutAll(false)
+            if (res.ok) {
+              cerrarSesion()
+              mostrar('Listo, cerramos todas las sesiones')
+            } else {
+              mostrar(res.error ?? 'No se pudo cerrar todas las sesiones', 'error')
+            }
+          }}
+        />
+      )}
+
+      {confirmandoEliminar && (
+        <EliminarCuenta
+          onCerrar={() => setConfirmandoEliminar(false)}
+          onEliminado={() => {
+            cerrarSesion()
+            mostrar('Tu cuenta y tus datos fueron eliminados')
+          }}
+        />
+      )}
+
+      <section>
+        <TituloSeccion>Zona peligrosa</TituloSeccion>
+        <Tarjeta>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-tinta">Eliminar mi cuenta</p>
+              <p className="mt-0.5 text-[13px] text-tenue">
+                Borramos tu cuenta y todos los movimientos, deudas, metas y categorías asociados. No se puede deshacer.
+              </p>
+            </div>
+            <Boton variante="peligro" onClick={() => setConfirmandoEliminar(true)}>
+              <Trash2 className="size-4" aria-hidden />
+              Eliminar cuenta
+            </Boton>
+          </div>
         </Tarjeta>
       </section>
 
@@ -612,5 +733,270 @@ function CampoSaldo({
         </Boton>
       </div>
     </Campo>
+  )
+}
+
+// ── Modales de cuenta ───────────────────────────────────────────────────
+
+function ConfirmarAccion({
+  abierto,
+  titulo,
+  mensaje,
+  textoConfirmar,
+  textoCancelar = 'Cancelar',
+  onCerrar,
+  onConfirmar,
+}: {
+  abierto: boolean
+  titulo: string
+  mensaje: string
+  textoConfirmar: string
+  textoCancelar?: string
+  onCerrar: () => void
+  onConfirmar: () => void | Promise<void>
+}) {
+  return (
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo={titulo}>
+      <p className="text-[14px] text-suave">{mensaje}</p>
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <Boton variante="fantasma" onClick={onCerrar}>
+          {textoCancelar}
+        </Boton>
+        <Boton variante="peligro" onClick={() => void onConfirmar()}>
+          {textoConfirmar}
+        </Boton>
+      </div>
+    </Modal>
+  )
+}
+
+function EditarNombre({
+  inicial,
+  onCerrar,
+  onGuardado,
+}: {
+  inicial: string
+  onCerrar: () => void
+  onGuardado: () => void | Promise<void>
+}) {
+  const { mostrar } = useAvisos()
+  const [nombre, setNombre] = useState(inicial)
+  const [guardando, setGuardando] = useState(false)
+
+  async function guardar() {
+    const limpio = nombre.trim()
+    if (limpio === '' || limpio === inicial) {
+      onCerrar()
+      return
+    }
+    setGuardando(true)
+    const res = await api.patch<{ user: { displayName: string } }>('/auth/perfil', {
+      displayName: limpio,
+    })
+    setGuardando(false)
+    if (!res.ok) {
+      mostrar(res.error ?? 'No se pudo guardar', 'error')
+      return
+    }
+    await onGuardado()
+  }
+
+  return (
+    <Modal abierto onCerrar={onCerrar} titulo="Editar nombre">
+      <Campo etiqueta="Cómo quieres que te diga la app" htmlFor="nuevo-nombre">
+        <Entrada
+          id="nuevo-nombre"
+          autoFocus
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          maxLength={80}
+        />
+      </Campo>
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <Boton variante="fantasma" onClick={onCerrar}>
+          Cancelar
+        </Boton>
+        <Boton onClick={() => void guardar()} disabled={guardando}>
+          {guardando ? 'Guardando…' : 'Guardar'}
+        </Boton>
+      </div>
+    </Modal>
+  )
+}
+
+function CambiarPassword({
+  onCerrar,
+  onGuardado,
+}: {
+  onCerrar: () => void
+  onGuardado: () => void
+}) {
+  const { mostrar } = useAvisos()
+  const [actual, setActual] = useState('')
+  const [nuevo, setNuevo] = useState('')
+  const [confirmar, setConfirmar] = useState('')
+  const [mostrarPw, setMostrarPw] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+
+  const cumple = nuevo.length >= 8 && /[a-z]/.test(nuevo) && /[A-Z]/.test(nuevo) && /[0-9]/.test(nuevo)
+  const coinciden = confirmar.length === 0 || confirmar === nuevo
+  const listo = actual.length > 0 && cumple && nuevo === confirmar
+
+  async function guardar() {
+    if (!listo) return
+    setGuardando(true)
+    const res = await api.patch('/auth/password', { actual, nuevo })
+    setGuardando(false)
+    if (!res.ok) {
+      mostrar(res.error ?? 'No se pudo cambiar la contraseña', 'error')
+      return
+    }
+    onGuardado()
+  }
+
+  return (
+    <Modal abierto onCerrar={onCerrar} titulo="Cambiar contraseña">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void guardar()
+        }}
+        className="space-y-4"
+      >
+        <Campo etiqueta="Contraseña actual" htmlFor="actual">
+          <div className="relative">
+            <Entrada
+              id="actual"
+              type={mostrarPw ? 'text' : 'password'}
+              autoFocus
+              value={actual}
+              onChange={(e) => setActual(e.target.value)}
+              required
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setMostrarPw(!mostrarPw)}
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-tenue hover:text-tinta"
+              aria-label={mostrarPw ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+            >
+              {mostrarPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+        </Campo>
+        <Campo
+          etiqueta="Nueva contraseña"
+          htmlFor="nuevo"
+          ayuda="8+ caracteres, mayúscula, minúscula y un número."
+          error={nuevo.length > 0 && !cumple ? 'No cumple la política.' : undefined}
+        >
+          <Entrada
+            id="nuevo"
+            type={mostrarPw ? 'text' : 'password'}
+            value={nuevo}
+            onChange={(e) => setNuevo(e.target.value)}
+            required
+          />
+        </Campo>
+        <Campo
+          etiqueta="Repite la nueva contraseña"
+          htmlFor="confirmar"
+          error={!coinciden ? 'No coinciden.' : undefined}
+        >
+          <Entrada
+            id="confirmar"
+            type={mostrarPw ? 'text' : 'password'}
+            value={confirmar}
+            onChange={(e) => setConfirmar(e.target.value)}
+            required
+          />
+        </Campo>
+        <p className="text-[13px] text-tenue">
+          Al guardar, las otras sesiones abiertas en otros dispositivos se cerrarán.
+        </p>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Boton variante="fantasma" type="button" onClick={onCerrar}>
+            Cancelar
+          </Boton>
+          <Boton type="submit" disabled={!listo || guardando}>
+            {guardando ? 'Guardando…' : 'Guardar'}
+          </Boton>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function EliminarCuenta({
+  onCerrar,
+  onEliminado,
+}: {
+  onCerrar: () => void
+  onEliminado: () => void
+}) {
+  const { mostrar } = useAvisos()
+  const [password, setPassword] = useState('')
+  const [confirmar, setConfirmar] = useState('')
+  const [eliminando, setEliminando] = useState(false)
+
+  const listo = password.length > 0 && confirmar === 'ELIMINAR'
+
+  async function eliminar() {
+    if (!listo) return
+    setEliminando(true)
+    const res = await api.delete<{ mensaje: string }>('/auth/cuenta', { password })
+    setEliminando(false)
+    if (!res.ok) {
+      mostrar(res.error ?? 'No se pudo eliminar la cuenta', 'error')
+      return
+    }
+    onEliminado()
+  }
+
+  return (
+    <Modal abierto onCerrar={onCerrar} titulo="Eliminar tu cuenta">
+      <p className="text-[14px] text-suave">
+        Esto borra tu cuenta y todos los movimientos, categorías, deudas y metas asociados.
+        No se puede deshacer.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void eliminar()
+        }}
+        className="mt-4 space-y-4"
+      >
+        <Campo etiqueta="Tu contraseña" htmlFor="pw-eliminar">
+          <Entrada
+            id="pw-eliminar"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+        </Campo>
+        <Campo
+          etiqueta='Escribe "ELIMINAR" para confirmar'
+          htmlFor="confirmar-eliminar"
+          error={confirmar.length > 0 && confirmar !== 'ELIMINAR' ? 'Debe ser exactamente ELIMINAR.' : undefined}
+        >
+          <Entrada
+            id="confirmar-eliminar"
+            value={confirmar}
+            onChange={(e) => setConfirmar(e.target.value)}
+            required
+          />
+        </Campo>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Boton variante="fantasma" type="button" onClick={onCerrar}>
+            Cancelar
+          </Boton>
+          <Boton variante="peligro" type="submit" disabled={!listo || eliminando}>
+            {eliminando ? 'Eliminando…' : 'Eliminar definitivamente'}
+          </Boton>
+        </div>
+      </form>
+    </Modal>
   )
 }

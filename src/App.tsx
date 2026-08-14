@@ -1,6 +1,10 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { ProveedorAuth, useAuth } from '@/estado/auth'
 import { Login } from '@/paginas/Login'
+import { VerificarEmail } from '@/paginas/VerificarEmail'
+import { OlvidePassword } from '@/paginas/OlvidePassword'
+import { RestablecerPassword } from '@/paginas/RestablecerPassword'
+import { AvisoPrivacidad } from '@/paginas/AvisoPrivacidad'
 import { ProveedorAvisos } from '@/estado/avisos'
 import { ProveedorFinanzas } from '@/estado/finanzas'
 import { useRecordatorios } from '@/estado/recordatorios'
@@ -14,8 +18,11 @@ import { Metas } from '@/paginas/Metas'
 import { Ajustes } from '@/paginas/Ajustes'
 
 /**
- * `HashRouter` y no `BrowserRouter`: la app se sirve como archivos estáticos y
- * sin servidor que reescriba rutas, recargar en /deudas daría 404.
+ * `HashRouter` y no `BrowserRouter`: la app se sirve como archivos estáticos
+ * y sin servidor que reescriba rutas, recargar en /deudas daría 404.
+ *
+ * Rutas públicas (sin sesión): login, olvidé, restablecer, verificar, aviso.
+ * El resto requieren autenticación y viven dentro de `Disposicion`.
  */
 export default function App() {
   return (
@@ -36,7 +43,13 @@ function PuertaAutenticacion() {
     )
   }
 
-  if (!auth.autenticado) return <Login />
+  if (!auth.autenticado) {
+    return (
+      <HashRouter>
+        <RutasPublicas />
+      </HashRouter>
+    )
+  }
 
   return (
     <ProveedorAvisos>
@@ -46,6 +59,19 @@ function PuertaAutenticacion() {
         </HashRouter>
       </ProveedorFinanzas>
     </ProveedorAvisos>
+  )
+}
+
+function RutasPublicas() {
+  return (
+    <Routes>
+      <Route path="/" element={<Login />} />
+      <Route path="/olvide-password" element={<OlvidePassword />} />
+      <Route path="/restablecer-password" element={<RestablecerPassword />} />
+      <Route path="/verificar-email" element={<VerificarEmail />} />
+      <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
+      <Route path="*" element={<Login />} />
+    </Routes>
   )
 }
 
@@ -62,6 +88,7 @@ function Contenido() {
         <Route path="/deudas" element={<Deudas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/ajustes" element={<Ajustes />} />
+        <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
         <Route path="*" element={<Tablero />} />
       </Routes>
     </Disposicion>

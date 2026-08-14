@@ -1,111 +1,139 @@
-import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
 import { api, borrarToken, guardarToken, obtenerToken } from '@/api/cliente'
 
 /**
- * Estado de autenticación. Antes de tener backend, la app no necesitaba
- * "quién soy": los datos vivían en este dispositivo. Ahora sí: el JWT prueba
- * identidad contra el servidor, y `me` es el espejo del payload del token
- * (id, email).
+ * Estado de autenticación.
+ *
+ * - El JWT vive en localStorage (mismo navegador).
+ * - `emailVerificado` se trae de /auth/me, que devuelve el user completo.
+ * - Si el backend rechaza el token (401, "sesión revocada"), deslogueamos
+ *   y dejamos que la UI muestre el login otra vez.
  */
 
 export interface Usuario {
   id: string
   email: string
   displayName: string
+  emailVerificado: boolean
+  rol: 'usuario' | 'admin'
+  debeCambiarPassword: boolean
 }
 
 export interface AuthEstado {
-  /** Mientras revisamos el token guardado al cargar. */
   iniciando: boolean
-  /** Hay un JWT válido y conocemos al usuario. */
   autenticado: boolean
   usuario: Usuario | null
-  login: (email: string, password: string) => Promise<{ ok: boolean; error: string | null }>
+  login: (
+    email: string,
+    password: string,
+    recordar: boolean,
+  ) => Promise<{ ok: boolean; error: string | null }>
   registrar: (
     email: string,
     password: string,
     displayName: string,
-  ) => Promise<{ ok: boolean; error: string | null }>
+  ) => Promise<{ ok: boolean; error: string | null; mensaje?: string }>
   cerrarSesion: () => void
+  refrescar: () => Promise<void>
 }
 
 const Contexto = createContext<AuthEstado | null>(null)
 
 interface SesionRespuesta {
   accessToken: string
-  user: { id: string; email: string }
+  user: PublicUserApi
 }
 
-interface MeRespuesta {
+interface PublicUserApi {
   id: string
   email: string
   displayName: string
+  emailVerificado: boolean
+  rol: 'usuario' | 'admin'
+  debeCambiarPassword: boolean
+  creadoEn: string
 }
 
 export function ProveedorAuth({ children }: { children: ReactNode }) {
   const [iniciando, setIniciando] = useState(true)
   const [usuario, setUsuario] = useState<Usuario | null>(null)
 
-  // Al montar, si hay token en localStorage, preguntamos al backend quién
-  // somos. Si falla (401, red), limpiamos el token y dejamos la app en
-  // "no autenticado" para que muestre el login.
+  // Centraliza la lógica de "traducir respuesta del backend a Usuario local".
+  const hidratar = useCallback(async () => {
+    const me = await api.get<PublicUserApi>('/auth/me')
+    if (me.ok && me.data) {
+      setUsuario({
+        id: me.data.id,
+        email: me.data.email,
+        displayName: me.data.displayName,
+        emailVerificado: me.data.emailVerificado,
+        rol: me.data.rol,
+        debeCambiarPassword: me.data.debeCambiarPassword,
+      })
+      return true
+    }
+    if (me.status === 401) {
+      borrarToken()
+      setUsuario(null)
+    }
+    return false
+  }, [])
+
   useEffect(() => {
     const token = obtenerToken()
     if (!token) {
       setIniciando(false)
       return
     }
-    api
-      .get<MeRespuesta>('/auth/me')
-      .then((res) => {
-        if (res.ok && res.data) {
-          setUsuario({
-            id: res.data.id,
-            email: res.data.email,
-            displayName: res.data.displayName,
-          })
-        } else if (res.status === 401) {
-          borrarToken()
-        }
-      })
-      .finally(() => setIniciando(false))
-  }, [])
+    void hidratar().finally(() => setIniciando(false))
+  }, [hidratar])
 
-  const login = useCallback<AuthEstado['login']>(async (email, password) => {
-    const res = await api.post<SesionRespuesta>('/auth/login', { email, password })
-    if (!res.ok || !res.data) return { ok: false, error: res.error }
-    guardarToken(res.data.accessToken)
-    // El login solo trae id+email; el displayName viene de /auth/me.
-    const me = await api.get<MeRespuesta>('/auth/me')
-    if (me.ok && me.data) {
-      setUsuario({
-        id: me.data.id,
-        email: me.data.email,
-        displayName: me.data.displayName,
+  const login = useCallback<AuthEstado['login']>(
+    async (email, password, recordar) => {
+      const res = await api.post<SesionRespuesta>('/auth/login', {
+        email,
+        password,
+        recordar,
       })
-    }
-    return { ok: true, error: null }
-  }, [])
+      if (!res.ok || !res.data) return { ok: false, error: res.error }
+      guardarToken(res.data.accessToken, recordar)
+      await hidratar()
+      return { ok: true, error: null }
+    },
+    [hidratar],
+  )
 
-  const registrar = useCallback<AuthEstado['registrar']>(async (email, password, displayName) => {
-    const res = await api.post<SesionRespuesta>('/auth/register', { email, password, displayName })
-    if (!res.ok || !res.data) return { ok: false, error: res.error }
-    guardarToken(res.data.accessToken)
-    const me = await api.get<MeRespuesta>('/auth/me')
-    if (me.ok && me.data) {
-      setUsuario({
-        id: me.data.id,
-        email: me.data.email,
-        displayName: me.data.displayName,
-      })
-    }
-    return { ok: true, error: null }
-  }, [])
+  const registrar = useCallback<AuthEstado['registrar']>(
+    async (email, password, displayName) => {
+      const res = await api.post<{ user: PublicUserApi; mensaje: string }>(
+        '/auth/register',
+        { email, password, displayName },
+      )
+      if (!res.ok || !res.data)
+        return { ok: false, error: res.error, mensaje: undefined }
+      // El registro ya NO devuelve token: la cuenta está pendiente de
+      // verificar email. Devolvemos ok=true para que la UI muestre
+      // "te enviamos un correo" sin loguear todavía.
+      return { ok: true, error: null, mensaje: res.data.mensaje }
+    },
+    [],
+  )
 
   const cerrarSesion = useCallback(() => {
     borrarToken()
     setUsuario(null)
   }, [])
+
+  const refrescar = useCallback(async () => {
+    await hidratar()
+  }, [hidratar])
 
   const valor: AuthEstado = {
     iniciando,
@@ -114,6 +142,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     login,
     registrar,
     cerrarSesion,
+    refrescar,
   }
 
   return <Contexto value={valor}>{children}</Contexto>
