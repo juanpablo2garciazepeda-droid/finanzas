@@ -40,29 +40,31 @@ export interface AuthEstado {
     password: string,
     recordar: boolean,
   ) => Promise<{ ok: boolean; error: string | null }>
-  registrar: (
-    email: string,
-    password: string,
-    displayName: string,
-    fotoUrl?: string,
-  ) => Promise<{
-    ok: boolean
-    status?: number
-    error: string | null
-    mensaje?: string
-    emailEnviadoA?: string
-    emailOk?: boolean
-  }>
   /**
-   * Canjea el código de 6 dígitos del correo. Si es correcto, el backend
-   * devuelve sesión iniciada y aquí queda guardada: quien acaba de demostrar
-   * que controla el correo no tiene por qué volver a teclear la contraseña
-   * que escribió hace un minuto.
+   * Alta en tres pasos. El correo se confirma ANTES de que exista la cuenta,
+   * así que abandonar el registro en la contraseña no deja un usuario a medias.
+   *
+   * 1. `solicitarCodigo` manda el código de 6 dígitos. Devuelve 409 si ese
+   *    correo ya tiene cuenta.
+   * 2. `confirmarCodigo` lo canjea por un pase de 30 minutos.
+   * 3. `registrar` crea la cuenta con ese pase y abre sesión de una vez: quien
+   *    acaba de demostrar que controla el correo y de elegir su contraseña no
+   *    tiene por qué teclearla otra vez.
    */
-  verificarCodigo: (
+  solicitarCodigo: (
+    email: string,
+  ) => Promise<{ ok: boolean; status?: number; error: string | null }>
+  confirmarCodigo: (
     email: string,
     codigo: string,
-  ) => Promise<{ ok: boolean; error: string | null }>
+  ) => Promise<{ ok: boolean; error: string | null; tokenRegistro?: string }>
+  registrar: (datos: {
+    email: string
+    password: string
+    displayName: string
+    tokenRegistro: string
+    fotoUrl?: string
+  }) => Promise<{ ok: boolean; status?: number; error: string | null }>
   cerrarSesion: () => void
   refrescar: () => Promise<void>
 }
@@ -127,11 +129,12 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
 
   const login = useCallback<AuthEstado['login']>(
     async (email, password, recordar) => {
-      const res = await api.post<SesionRespuesta>('/auth/login', {
-        email,
-        password,
-        recordar,
-      })
+      // `recordar` NO se manda: decide si el token va a localStorage o a
+      // sessionStorage, y eso pasa entero en el navegador. El backend valida
+      // con `forbidNonWhitelisted`, así que mandárselo hacía fallar el login
+      // con "property recordar should not exist" — el campo de más tumbaba
+      // la petición completa.
+      const res = await api.post<SesionRespuesta>('/auth/login', { email, password })
       if (!res.ok || !res.data) return { ok: false, error: res.error }
       guardarToken(res.data.accessToken, recordar)
       await hidratar()
@@ -148,48 +151,42 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     [hidratar],
   )
 
+  const solicitarCodigo = useCallback<AuthEstado['solicitarCodigo']>(async (email) => {
+    const res = await api.post('/auth/codigo-registro', { email })
+    if (!res.ok) return { ok: false, status: res.status, error: res.error }
+    return { ok: true, error: null }
+  }, [])
+
+  const confirmarCodigo = useCallback<AuthEstado['confirmarCodigo']>(
+    async (email, codigo) => {
+      const res = await api.post<{ tokenRegistro: string; email: string }>(
+        '/auth/confirmar-codigo-registro',
+        { email, codigo },
+      )
+      if (!res.ok || !res.data) return { ok: false, error: res.error }
+      return { ok: true, error: null, tokenRegistro: res.data.tokenRegistro }
+    },
+    [],
+  )
+
   const registrar = useCallback<AuthEstado['registrar']>(
-    async (email, password, displayName, fotoUrl) => {
-      const res = await api.post<{
-        cuentaCreada: true
-        user: PublicUserApi
-        mensaje: string
-        emailEnviadoA: string
-        emailOk: boolean
-      }>('/auth/register', {
+    async ({ email, password, displayName, tokenRegistro, fotoUrl }) => {
+      const res = await api.post<SesionRespuesta>('/auth/register', {
         email,
         password,
         displayName,
+        tokenRegistro,
         // Solo si hay foto: mandar `undefined` deja la clave fuera del JSON,
         // que es lo que espera el DTO (`@IsOptional`). Mandar cadena vacía
         // fallaría la validación del formato.
         ...(fotoUrl ? { fotoUrl } : {}),
       })
       if (!res.ok || !res.data) {
-        return { ok: false, status: res.status, error: res.error, mensaje: undefined }
+        return { ok: false, status: res.status, error: res.error }
       }
-      // El registro NO devuelve token: la cuenta queda pendiente de verificar
-      // el correo. La sesión llega al canjear el código.
-      return {
-        ok: true,
-        error: null,
-        mensaje: res.data.mensaje,
-        emailEnviadoA: res.data.emailEnviadoA,
-        emailOk: res.data.emailOk,
-      }
-    },
-    [],
-  )
-
-  const verificarCodigo = useCallback<AuthEstado['verificarCodigo']>(
-    async (email, codigo) => {
-      const res = await api.post<SesionRespuesta>('/auth/verificar-codigo', {
-        email,
-        codigo,
-      })
-      if (!res.ok || !res.data) return { ok: false, error: res.error }
-      // Cuenta recién creada: la sesión persiste. Quien se acaba de registrar
-      // no espera que cerrar la pestaña le tire la sesión.
+      // El correo ya se confirmó antes de llegar aquí, así que la cuenta nace
+      // con sesión abierta. Persistente: quien acaba de registrarse no espera
+      // que cerrar la pestaña le tire la sesión.
       guardarToken(res.data.accessToken, true)
       await hidratar()
       return { ok: true, error: null }
@@ -215,12 +212,22 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       autenticado: usuario !== null,
       usuario,
       login,
+      solicitarCodigo,
+      confirmarCodigo,
       registrar,
-      verificarCodigo,
       cerrarSesion,
       refrescar,
     }),
-    [iniciando, usuario, login, registrar, verificarCodigo, cerrarSesion, refrescar],
+    [
+      iniciando,
+      usuario,
+      login,
+      solicitarCodigo,
+      confirmarCodigo,
+      registrar,
+      cerrarSesion,
+      refrescar,
+    ],
   )
 
   return <Contexto value={valor}>{children}</Contexto>

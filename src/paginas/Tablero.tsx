@@ -11,6 +11,7 @@ import { gastoPorCategoria, transaccionesDelPeriodo } from '@/dominio/presupuest
 import { generarRecomendaciones } from '@/dominio/recomendaciones'
 import { calcularSalud, serieDeudaYAhorro, serieHistorica } from '@/dominio/salud'
 import { useFinanzas } from '@/estado/finanzas'
+import { useT } from '@/estado/i18n'
 import { MedidorMargen } from '@/componentes/MedidorMargen'
 import { SimuladorGasto } from '@/componentes/SimuladorGasto'
 import { ConfirmarCobro } from '@/componentes/ConfirmarCobro'
@@ -40,6 +41,7 @@ function EsperaGrafica({ alto = 200 }: { alto?: number }) {
 }
 
 export function Tablero() {
+  const t = useT()
   const { ctx, categorias, deudas, metas, pagos, ajustes, hayMovimientos, hayDatos, periodo, cargando } =
     useFinanzas()
   const { moneda, locale } = ajustes
@@ -77,7 +79,7 @@ export function Tablero() {
         <MedidorMargen veredicto={veredicto} margen={margen} monto={0} />
         <Boton ancho className="mt-5" onClick={() => setSimulando(true)}>
           <HelpCircle className="size-[18px]" aria-hidden />
-          ¿Me lo puedo permitir?
+          {t('tablero.permitir')}
         </Boton>
       </Tarjeta>
 
@@ -91,16 +93,15 @@ export function Tablero() {
         <Tarjeta className="flex flex-col items-start gap-3">
           <div>
             <p className="font-display text-[17px] font-semibold text-tinta">
-              Falta lo más importante: tus gastos
+              {t('tablero.falta_gastos')}
             </p>
             <p className="mt-1 text-[15px] text-suave">
-              Ya tengo tus deudas y tu ingreso. En cuanto registres gastos podré decirte con
-              precisión cuánto te queda y en qué se te está yendo.
+              {t('tablero.falta_detalle')}
             </p>
           </div>
           <Boton variante="secundario" onClick={() => setRegistrando(true)}>
             <Plus className="size-4" aria-hidden />
-            Registrar mi primer gasto
+            {t('tablero.primer_gasto')}
           </Boton>
         </Tarjeta>
       )}
@@ -113,44 +114,44 @@ export function Tablero() {
               aquí va lo que no está en ningún otro sitio: cuánto se ha ido. */}
           {margen.saldo.declarado ? (
             <Cifra
-              etiqueta={`Gastado ${delCiclo(margen.ciclo.tipo)}`}
+              etiqueta={t('tablero.gastado_ciclo', { ciclo: delCiclo(margen.ciclo.tipo) })}
               valor={dinero(margen.egresos)}
               detalle={
                 margen.ingresosReales > 0
-                  ? `${dinero(margen.ingresosReales)} entraron`
-                  : 'Sin ingresos registrados aún'
+                  ? t('tablero.entraron', { monto: dinero(margen.ingresosReales) })
+                  : t('tablero.sin_ingresos')
               }
             />
           ) : (
             <Cifra
-              etiqueta={`Balance ${delCiclo(margen.ciclo.tipo)}`}
+              etiqueta={t('tablero.balance_ciclo', { ciclo: delCiclo(margen.ciclo.tipo) })}
               valor={dinero(margen.flujoDelCiclo)}
               tono={margen.flujoDelCiclo >= 0 ? 'text-tinta' : 'text-rojo'}
               detalle={
                 margen.ingresosEstimados
-                  ? `${dinero(margen.ingresos)} estimados, aún sin registrar`
-                  : `${dinero(margen.ingresosReales)} entraron`
+                  ? t('tablero.estimados', { monto: dinero(margen.ingresos) })
+                  : t('tablero.entraron', { monto: dinero(margen.ingresosReales) })
               }
             />
           )}
         </Tarjeta>
         <Tarjeta>
           <Cifra
-            etiqueta="Deuda total"
+            etiqueta={t('tablero.deuda_total')}
             valor={dinero(deudaTotal(deudas))}
-            detalle={`${deudas.filter((d) => !d.liquidada).length} activas`}
+            detalle={t('tablero.activas', { n: deudas.filter((d) => !d.liquidada).length })}
           />
         </Tarjeta>
         <Tarjeta>
           <Cifra
-            etiqueta="Ahorro total"
+            etiqueta={t('tablero.ahorro_total')}
             valor={dinero(ahorroTotal(metas))}
-            detalle={`${metas.filter((m) => !m.completada).length} metas en curso`}
+            detalle={t('tablero.metas_en_curso', { n: metas.filter((m) => !m.completada).length })}
           />
         </Tarjeta>
         <Tarjeta>
           <Cifra
-            etiqueta="Salud financiera"
+            etiqueta={t('tablero.salud')}
             valor={salud.suficiente ? String(salud.puntaje) : '—'}
             detalle={salud.etiqueta}
             tono={
@@ -171,11 +172,11 @@ export function Tablero() {
           <TituloSeccion
             accion={
               <Link to="/deudas" className="inline-flex items-center gap-1 text-xs text-acento hover:underline">
-                Ver deudas <ArrowRight className="size-3" aria-hidden />
+                {t('tablero.ver_deudas')} <ArrowRight className="size-3" aria-hidden />
               </Link>
             }
           >
-            Próximos pagos
+            {t('tablero.proximos_pagos')}
           </TituloSeccion>
           <Tarjeta className="divide-y divide-borde p-0">
             {vencimientos.map((v) => (
@@ -199,7 +200,7 @@ export function Tablero() {
 
       {recomendaciones.length > 0 && (
         <section>
-          <TituloSeccion>Qué haría yo con esto</TituloSeccion>
+          <TituloSeccion>{t('tablero.recomendaciones')}</TituloSeccion>
           <div className="grid gap-3 sm:grid-cols-2">
             {recomendaciones.slice(0, 4).map((r) => (
               <Tarjeta key={r.id} className="flex gap-3">
@@ -217,7 +218,7 @@ export function Tablero() {
       )}
 
       <section>
-        <TituloSeccion>Ingresos y egresos</TituloSeccion>
+        <TituloSeccion>{t('tablero.flujo')}</TituloSeccion>
         <Tarjeta>
           <Suspense fallback={<EsperaGrafica />}>
             <GraficaFlujo datos={flujo} />
@@ -226,7 +227,7 @@ export function Tablero() {
       </section>
 
       <section>
-        <TituloSeccion>En qué se fue {nombrePeriodo(periodo)}</TituloSeccion>
+        <TituloSeccion>{t('tablero.categorias', { periodo: nombrePeriodo(periodo) })}</TituloSeccion>
         <Tarjeta>
           <Suspense fallback={<EsperaGrafica alto={180} />}>
             <GraficaCategorias datos={rebanadas} />
@@ -235,7 +236,7 @@ export function Tablero() {
       </section>
 
       <section>
-        <TituloSeccion>Deuda y ahorro</TituloSeccion>
+        <TituloSeccion>{t('tablero.evolucion')}</TituloSeccion>
         <Tarjeta>
           <Suspense fallback={<EsperaGrafica />}>
             <GraficaEvolucion datos={evolucion} />
@@ -254,7 +255,9 @@ export function Tablero() {
             </Insignia>
           }
         >
-          {salud.suficiente ? `Salud financiera · ${salud.puntaje}/100` : 'Salud financiera'}
+          {salud.suficiente
+            ? t('tablero.salud_puntos', { puntos: salud.puntaje })
+            : t('tablero.salud')}
         </TituloSeccion>
         <Tarjeta className="space-y-4">
           <MedidorSalud salud={salud} />
@@ -308,21 +311,21 @@ function Esqueleto() {
 }
 
 function Bienvenida() {
+  const t = useT()
   return (
     <div className="mx-auto max-w-md py-10 text-center">
       <h1 className="font-display text-3xl font-semibold tracking-tight text-tinta">
-        Antes de gastar, pregúntale.
+        {t('tablero.bienvenida_titulo')}
       </h1>
       <p className="mt-3 text-suave">
-        Finanzas GZ calcula cuánto te queda de verdad después de tus deudas y tus metas, y te dice si ese
-        gasto cabe.
+        {t('tablero.bienvenida_detalle')}
       </p>
 
       <div className="mt-8 space-y-3 text-left">
         {[
-          ['Registra un gasto', 'El botón + de abajo. Monto, categoría y listo.'],
-          ['Pon tus límites', 'Un presupuesto por categoría para tener contra qué medir.'],
-          ['Carga tus deudas y metas', 'Es lo que convierte el saldo en un margen real.'],
+          [t('tablero.bienvenida_p1_titulo'), t('tablero.bienvenida_p1_detalle')],
+          [t('tablero.bienvenida_p2_titulo'), t('tablero.bienvenida_p2_detalle')],
+          [t('tablero.bienvenida_p3_titulo'), t('tablero.bienvenida_p3_detalle')],
         ].map(([titulo, detalle], i) => (
           <div key={titulo} className="flex gap-3 rounded-tarjeta bg-superficie p-4 shadow-tarjeta">
             <span className="cifras flex size-7 shrink-0 items-center justify-center rounded-full bg-acento-suave text-sm font-semibold text-acento">
@@ -337,7 +340,12 @@ function Bienvenida() {
       </div>
 
       <p className="mt-6 text-[13px] text-tenue">
-        Empieza con el botón <span className="cifras font-semibold">+</span> de abajo a la derecha.
+        {t('tablero.bienvenida_empezar', { simbolo: '+' }).split('+').map((parte, i, arr) => (
+          <span key={i}>
+            {parte}
+            {i < arr.length - 1 && <span className="cifras font-semibold">+</span>}
+          </span>
+        ))}
       </p>
     </div>
   )

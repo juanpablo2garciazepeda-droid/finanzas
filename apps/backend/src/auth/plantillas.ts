@@ -234,6 +234,43 @@ export function correoVerificacion(
   return { asunto, texto, html };
 }
 
+/**
+ * Código para confirmar el correo antes de que exista la cuenta.
+ *
+ * Sin botón ni enlace, a diferencia de `correoVerificacion`: en este punto no
+ * hay cuenta que activar, así que un enlace solo podría llevar a una pantalla
+ * sin contexto. El código se teclea en la pestaña donde se quedó el alta.
+ *
+ * Tampoco lleva nombre: se pide después del correo, así que todavía no se sabe.
+ */
+export function correoCodigoRegistro(codigo: string): CorreoArmado {
+  const asunto = `${codigo} es tu código de Finanzas GZ`;
+  const texto = [
+    'Tu código para crear tu cuenta en Finanzas GZ es:',
+    '',
+    codigo,
+    '',
+    'Tecléalo en la pestaña donde te quedaste. Vence en 30 minutos.',
+    'Si no fuiste tú, ignora este mensaje: sin el código no se crea ninguna cuenta.',
+  ].join('\n');
+
+  const html = envoltura({
+    preheader: `Tu código es ${codigo}. Vence en 30 minutos.`,
+    contenido: [
+      titulo('Confirma tu correo'),
+      parrafo('Teclea este código en la pestaña donde te quedaste para seguir creando tu cuenta:'),
+      bloqueCodigo(codigo),
+      nota(
+        'Vence en 30 minutos y solo sirve una vez. Si no fuiste tú quien lo pidió, no tienes que hacer nada: sin el código no se crea ninguna cuenta con tu correo.',
+      ),
+    ].join('\n'),
+    piePersonalizado:
+      'Recibiste este correo porque alguien lo escribió al crear una cuenta en Finanzas GZ.',
+  });
+
+  return { asunto, texto, html };
+}
+
 export function correoBienvenida(nombre: string, enlaceApp: string): CorreoArmado {
   const asunto = 'Tu cuenta de Finanzas GZ está lista';
   const texto = [

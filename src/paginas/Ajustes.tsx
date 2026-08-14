@@ -68,6 +68,7 @@ export function Ajustes() {
   const { mostrar } = useAvisos()
   const { usuario, cerrarSesion, refrescar: refrescarAuth } = useAuth()
   const i18n = useI18n()
+  const t = i18n.t
   const esOscuro = useEsOscuro()
   const [editandoCategoria, setEditandoCategoria] = useState<Categoria | 'nueva' | undefined>()
   const [borrandoCategoria, setBorrandoCategoria] = useState<Categoria | undefined>()
@@ -84,7 +85,7 @@ export function Ajustes() {
   return (
     <div className="space-y-6">
       <section>
-        <TituloSeccion>Tu cuenta</TituloSeccion>
+        <TituloSeccion>{t('ajustes.tu_cuenta')}</TituloSeccion>
         <Tarjeta className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <FotoPerfil />
@@ -148,11 +149,11 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Automatización</TituloSeccion>
+        <TituloSeccion>{t('ajustes.automatizacion')}</TituloSeccion>
         <Tarjeta>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-tinta">Gastos e ingresos recurrentes</p>
+              <p className="text-sm text-tinta">{t('ajustes.recurrentes_desc')}</p>
               <p className="mt-0.5 text-[13px] text-tenue">
                 Crea plantillas (Netflix, la renta, tu sueldo…) y se agregan solas cada mes.
               </p>
@@ -169,11 +170,11 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Tus datos</TituloSeccion>
+        <TituloSeccion>{t('ajustes.tus_datos')}</TituloSeccion>
         <Tarjeta className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-tinta">Exportar todos mis datos</p>
+              <p className="text-sm text-tinta">{t('ajustes.exportar_desc')}</p>
               <p className="mt-0.5 text-[13px] text-tenue">
                 Descarga una copia completa (categorías, movimientos, deudas, metas, recurrentes,
                 ajustes) en formato JSON. Lo que la ley te garantiza tener.
@@ -211,7 +212,7 @@ export function Ajustes() {
           <div className="border-t border-borde pt-3">
             <label className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm text-tinta">Importar movimientos desde CSV</p>
+                <p className="text-sm text-tinta">{t('ajustes.importar_desc')}</p>
                 <p className="mt-0.5 text-[13px] text-tenue">
                   Columnas: <code className="rounded bg-elevada px-1">fecha, tipo, monto, categoria, metodoPago, nota</code>.
                   Las categorías nuevas se crean al vuelo.
@@ -325,11 +326,11 @@ export function Ajustes() {
       )}
 
       <section>
-        <TituloSeccion>Zona peligrosa</TituloSeccion>
+        <TituloSeccion>{t('ajustes.zona_peligrosa')}</TituloSeccion>
         <Tarjeta>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-tinta">Eliminar mi cuenta</p>
+              <p className="text-sm text-tinta">{t('ajustes.eliminar_desc')}</p>
               <p className="mt-0.5 text-[13px] text-tenue">
                 Borramos tu cuenta y todos los movimientos, deudas, metas y categorías asociados. No se puede deshacer.
               </p>
@@ -343,9 +344,9 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Moneda y formato</TituloSeccion>
+        <TituloSeccion>{t('ajustes.moneda_formato')}</TituloSeccion>
         <Tarjeta className="space-y-4">
-          <Campo etiqueta="Moneda" htmlFor="moneda">
+          <Campo etiqueta={t('ajustes.moneda')} htmlFor="moneda">
             <Selector
               id="moneda"
               value={ajustes.moneda}
@@ -369,12 +370,12 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Apariencia</TituloSeccion>
+        <TituloSeccion>{t('ajustes.apariencia')}</TituloSeccion>
         <Tarjeta className="space-y-5">
           <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">Idioma</span>
+            <span className="mb-2 block text-[13px] font-medium text-suave">{t('ajustes.idioma')}</span>
             <Segmentado
-              etiqueta="Idioma"
+              etiqueta={t('ajustes.idioma')}
               valor={i18n.idioma}
               onCambiar={(v) => void i18n.setIdioma(v as 'es' | 'en')}
               opciones={[
@@ -388,9 +389,9 @@ export function Ajustes() {
           </div>
 
           <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">Tema</span>
+            <span className="mb-2 block text-[13px] font-medium text-suave">{t('ajustes.tema')}</span>
             <Segmentado
-              etiqueta="Tema"
+              etiqueta={t('ajustes.tema')}
               valor={ajustes.tema}
               onCambiar={(tema) => void guardarAjustes({ tema })}
               opciones={(['claro', 'oscuro', 'sistema'] as const).map((valor) => ({
@@ -404,8 +405,8 @@ export function Ajustes() {
           </div>
 
           <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">Color de acento</span>
-            <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Color de acento">
+            <span className="mb-2 block text-[13px] font-medium text-suave">{t('ajustes.color_acento')}</span>
+            <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={t('ajustes.color_acento')}>
               {(Object.keys(MUESTRA_ACENTO) as Acento[]).map((opcion) => {
                 const muestra = MUESTRA_ACENTO[opcion]
                 const activo = ajustes.acento === opcion
@@ -438,7 +439,7 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Tu dinero</TituloSeccion>
+        <TituloSeccion>{t('ajustes.tu_dinero')}</TituloSeccion>
         <Tarjeta className="space-y-3">
           <CampoSaldo
             valor={ajustes.saldoInicial}
@@ -453,13 +454,13 @@ export function Ajustes() {
       </section>
 
       <section>
-        <TituloSeccion>Tu ingreso</TituloSeccion>
+        <TituloSeccion>{t('ajustes.tu_ingreso')}</TituloSeccion>
         <Tarjeta className="space-y-3">
           <CampoIngreso valor={ajustes.ingresoMensual} moneda={ajustes.moneda} locale={ajustes.locale} />
           <div>
             <span className="mb-2 block text-[13px] font-medium text-suave">Cada cuánto cobras</span>
             <Segmentado
-              etiqueta="Cada cuánto cobras"
+              etiqueta={t('ajustes.cada_cuanto')}
               valor={ajustes.cicloPago}
               onCambiar={(cicloPago) => void guardarAjustes({ cicloPago })}
               opciones={(['semanal', 'quincenal', 'mensual'] as const).map((valor) => ({

@@ -179,7 +179,7 @@ function ajustesPorDefecto(): Ajustes {
     saldoInicial: 0,
     saldoInicialFecha: '',
     tema: 'sistema',
-    acento: 'azul',
+    acento: 'grafito',
     diasAvisoVencimiento: 7,
     umbralPrecaucion: 0.8,
     notificacionesActivas: false,

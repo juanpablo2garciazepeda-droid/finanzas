@@ -12,6 +12,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { TokenVerificacion } from './token-verificacion.entity';
 import { TokenResetPassword } from './token-reset-password.entity';
+import { CodigoRegistro } from './codigo-registro.entity';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { TokenResetPassword } from './token-reset-password.entity';
     DigestModule,
     EmailModule,
     PassportModule,
-    TypeOrmModule.forFeature([TokenVerificacion, TokenResetPassword]),
+    TypeOrmModule.forFeature([TokenVerificacion, TokenResetPassword, CodigoRegistro]),
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'change-me-in-production',
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN ?? '30d' },

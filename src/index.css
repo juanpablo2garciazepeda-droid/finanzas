@@ -23,10 +23,17 @@
   --color-suave: #6e6e73;
   --color-tenue: #86868b;
 
-  /* Acento. Los valores concretos los fija el bloque [data-acento]. */
-  --color-acento: #0071e3;
-  --color-acento-hondo: #0066cc;
-  --color-acento-suave: #e8f2fd;
+  /* Acento por defecto: grafito. Los valores concretos los fija el bloque
+     [data-acento]; estos son los que se ven antes de que carguen los ajustes
+     —landing, login, registro— y cuando nadie ha elegido nada.
+
+     Grafito y no azul porque el azul convertía cada botón, cada enlace y el
+     logotipo en el mismo acento saturado que usa media web. En gris el color
+     vuelve a significar algo: lo único de color en la pantalla es el semáforo,
+     que es de lo que trata la app. */
+  --color-acento: #3a3a3c;
+  --color-acento-hondo: #1d1d1f;
+  --color-acento-suave: #ececee;
   /* Lo que se escribe ENCIMA del acento. Calculado, no elegido: en claro todos
      los acentos pasan 4.5:1 contra blanco y ninguno contra negro; en oscuro es
      exactamente al revés. Un gris claro con letras blancas no se lee. */
@@ -138,11 +145,17 @@
   --color-acento-suave: #ececee;
 }
 
-:root[data-tema='oscuro'][data-acento='azul'],
-:root[data-tema='oscuro']:not([data-acento]) {
+:root[data-tema='oscuro'][data-acento='azul'] {
   --color-acento: #0a84ff;
   --color-acento-hondo: #409cff;
   --color-acento-suave: #0a84ff26;
+}
+/* Sin elección guardada, en oscuro manda el mismo grafito del tema claro pero
+   invertido: gris muy claro sobre negro, con texto negro encima. */
+:root[data-tema='oscuro']:not([data-acento]) {
+  --color-acento: #d1d1d6;
+  --color-acento-hondo: #f5f5f7;
+  --color-acento-suave: #d1d1d626;
 }
 :root[data-tema='oscuro'][data-acento='morado'] {
   --color-acento: #bf5af2;
@@ -171,11 +184,15 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-tema='claro'])[data-acento='azul'],
-  :root:not([data-tema='claro']):not([data-acento]) {
+  :root:not([data-tema='claro'])[data-acento='azul'] {
     --color-acento: #0a84ff;
     --color-acento-hondo: #409cff;
     --color-acento-suave: #0a84ff26;
+  }
+  :root:not([data-tema='claro']):not([data-acento]) {
+    --color-acento: #d1d1d6;
+    --color-acento-hondo: #f5f5f7;
+    --color-acento-suave: #d1d1d626;
   }
   :root:not([data-tema='claro'])[data-acento='morado'] {
     --color-acento: #bf5af2;

@@ -326,52 +326,43 @@ export async function cargarTodo(): Promise<{
   metas: Meta[]
   aportes: AporteMeta[]
 }> {
-  const [ajustes, categorias, transacciones, presupuestos, deudas, metas] = await Promise.all([
-    api.get<ApiAjustes>('/ajustes'),
-    api.get<ApiCategoria[]>('/categorias'),
-    api.get<ApiTransaccion[]>('/transacciones'),
-    api.get<ApiPresupuesto[]>('/presupuestos'),
-    api.get<ApiDeuda[]>('/deudas'),
-    api.get<ApiMeta[]>('/metas'),
-  ])
+  // Un solo round-trip al backend; el servidor reparaleliza las queries.
+  // Antes eran 6 + N_deudas + N_metas (~11 con 3 deudas y 2 metas), y eso en
+  // un foco de pestaña se notaba.
+  const res = await api.get<{
+    ajustes: ApiAjustes
+    categorias: ApiCategoria[]
+    transacciones: ApiTransaccion[]
+    presupuestos: ApiPresupuesto[]
+    deudas: ApiDeuda[]
+    metas: ApiMeta[]
+    pagos: ApiPagoDeuda[]
+    aportes: ApiAporteMeta[]
+  }>('/inicio')
 
-  // Si alguna llamada falla (ej. ajustes no existe aún), caemos a defaults
-  // razonables. Categorías vacías está bien — el backend siembra al registrarse.
-  const aj = ajustes.ok && ajustes.data ? ajusteDesdeApi(ajustes.data) : ajustesPorDefecto()
-
-  // Pagos: una llamada por deuda. En producción harías un endpoint /pagos
-  // con filtro, pero el actual pide deudaId; es aceptable hasta que crezca.
-  const pagos: PagoDeuda[] = []
-  if (deudas.ok && deudas.data) {
-    const resultados = await Promise.all(
-      deudas.data.map((d) => api.get<ApiPagoDeuda[]>(`/deudas/${d.id}/pagos`)),
-    )
-    for (const r of resultados) {
-      if (r.ok && r.data) pagos.push(...r.data.map(pagoDesdeApi))
+  if (!res.ok || !res.data) {
+    return {
+      ajustes: ajustesPorDefecto(),
+      categorias: [],
+      transacciones: [],
+      presupuestos: [],
+      deudas: [],
+      pagos: [],
+      metas: [],
+      aportes: [],
     }
   }
 
-  const aportes: AporteMeta[] = []
-  if (metas.ok && metas.data) {
-    const resultados = await Promise.all(
-      metas.data.map((m) => api.get<ApiAporteMeta[]>(`/metas/${m.id}/aportes`)),
-    )
-    for (const r of resultados) {
-      if (r.ok && r.data) aportes.push(...r.data.map(aporteDesdeApi))
-    }
-  }
-
+  const d = res.data
   return {
-    ajustes: aj,
-    categorias: categorias.ok && categorias.data ? categorias.data.map(categoriaDesdeApi) : [],
-    transacciones:
-      transacciones.ok && transacciones.data ? transacciones.data.map(transaccionDesdeApi) : [],
-    presupuestos:
-      presupuestos.ok && presupuestos.data ? presupuestos.data.map(presupuestoDesdeApi) : [],
-    deudas: deudas.ok && deudas.data ? deudas.data.map(deudaDesdeApi) : [],
-    pagos,
-    metas: metas.ok && metas.data ? metas.data.map(metaDesdeApi) : [],
-    aportes,
+    ajustes: ajusteDesdeApi(d.ajustes),
+    categorias: d.categorias.map(categoriaDesdeApi),
+    transacciones: d.transacciones.map(transaccionDesdeApi),
+    presupuestos: d.presupuestos.map(presupuestoDesdeApi),
+    deudas: d.deudas.map(deudaDesdeApi),
+    pagos: d.pagos.map(pagoDesdeApi),
+    metas: d.metas.map(metaDesdeApi),
+    aportes: d.aportes.map(aporteDesdeApi),
   }
 }
 
@@ -385,7 +376,7 @@ function ajustesPorDefecto(): Ajustes {
     saldoInicial: 0,
     saldoInicialFecha: '',
     tema: 'sistema',
-    acento: 'azul',
+    acento: 'grafito',
     diasAvisoVencimiento: 7,
     umbralPrecaucion: 0.8,
     notificacionesActivas: false,

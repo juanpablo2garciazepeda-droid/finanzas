@@ -44,6 +44,33 @@ export class RegisterDto {
   @MaxLength(LARGO_MAX_FOTO, { message: 'La foto es demasiado grande.' })
   @Matches(PATRON_FOTO, { message: 'Formato de foto no admitido.' })
   fotoUrl?: string;
+
+  /**
+   * Pase de 30 minutos que devuelve `/auth/confirmar-codigo-registro`. Prueba
+   * que este navegador recibió el código en ese correo; sin él no se crea la
+   * cuenta.
+   */
+  @IsString()
+  @MinLength(20)
+  tokenRegistro!: string;
+}
+
+/** Paso 1 del alta: pedir el código para un correo que aún no tiene cuenta. */
+export class SolicitarCodigoRegistroDto {
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+}
+
+/** Paso 2: canjear ese código. */
+export class ConfirmarCodigoRegistroDto {
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'El código son 6 dígitos.' })
+  codigo!: string;
 }
 
 /**

@@ -7,6 +7,7 @@ import { AjustesController } from './ajustes.controller';
 @Module({
   imports: [TypeOrmModule.forFeature([Ajuste])],
   providers: [AjustesService],
+  exports: [AjustesService],
   controllers: [AjustesController],
 })
 export class AjustesModule {}

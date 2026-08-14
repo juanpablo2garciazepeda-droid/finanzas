@@ -20,9 +20,11 @@ import { Request } from 'express';
 import {
   correoBienvenida,
   correoCambioCorreo,
+  correoCodigoRegistro,
   correoReset,
   correoVerificacion,
 } from './plantillas';
+import { CodigoRegistro } from './codigo-registro.entity';
 
 export interface JwtPayload {
   sub: string;
@@ -74,6 +76,8 @@ export class AuthService {
     private readonly tokensVerificacion: Repository<TokenVerificacion>,
     @InjectRepository(TokenResetPassword)
     private readonly tokensReset: Repository<TokenResetPassword>,
+    @InjectRepository(CodigoRegistro)
+    private readonly codigosRegistro: Repository<CodigoRegistro>,
   ) {}
 
   // ── Registro ─────────────────────────────────────────────────────────────
@@ -90,19 +94,139 @@ export class AuthService {
    * era confuso para usuarios reales: pensaban que les iba a llegar y no
    * llegaba, y no sabían si tenían que esperar o si algo estaba mal.
    */
+  /**
+   * Paso 1 del alta: manda un código al correo, sin crear nada todavía.
+   *
+   * Devuelve 409 si el correo ya tiene cuenta. Aquí sí se confirma la
+   * existencia a propósito, igual que hace el registro: la persona está
+   * intentando darse de alta y necesita saber que ya la tiene para poder
+   * entrar en vez de quedarse esperando un correo que no le sirve. El límite
+   * de peticiones del endpoint es lo que impide usarlo para enumerar cuentas.
+   */
+  async solicitarCodigoRegistro(
+    email: string,
+    request?: Request,
+  ): Promise<{ enviadoA: string; expiraEnMinutos: number }> {
+    const lowerEmail = email.toLowerCase();
+
+    const existente = await this.users.findByEmail(lowerEmail);
+    if (existente) {
+      throw new ConflictException(
+        'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.',
+      );
+    }
+
+    const codigo = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    await this.codigosRegistro.insert({
+      email: lowerEmail,
+      codigoHash: this.hashToken(codigo),
+      intentos: 0,
+      expiraEn: new Date(Date.now() + EXPIRACION_VERIFICACION_MS),
+    });
+
+    // Sin enlace: en este punto no hay cuenta que activar, así que un botón
+    // solo podría llevar a una pantalla que no sabría qué hacer con él.
+    const correo = correoCodigoRegistro(codigo);
+    await this.email.enviar({
+      para: lowerEmail,
+      asunto: correo.asunto,
+      texto: correo.texto,
+      html: correo.html,
+    });
+
+    void this.auditoria.registrar({
+      emailIntento: lowerEmail,
+      accion: 'reenvio_verificacion',
+      detalles: { motivo: 'codigo_pre_registro' },
+      ip: this.ip(request),
+    });
+
+    return {
+      enviadoA: lowerEmail,
+      expiraEnMinutos: Math.round(EXPIRACION_VERIFICACION_MS / 60_000),
+    };
+  }
+
+  /**
+   * Paso 2: canjea el código y devuelve un pase de corta vida que demuestra
+   * que este navegador controla ese correo.
+   *
+   * El pase es un JWT firmado con 30 minutos de vida y no una fila más en la
+   * base: el estado ya está en la tabla de códigos, y guardar además una
+   * "sesión a medias" obligaría a limpiarla cuando la persona abandona el alta
+   * en el paso de la contraseña, que es donde más se abandona.
+   */
+  async confirmarCodigoRegistro(
+    email: string,
+    codigo: string,
+    request?: Request,
+  ): Promise<{ tokenRegistro: string; email: string }> {
+    const lowerEmail = email.toLowerCase();
+    const invalido = new BadRequestException(
+      'El código no es correcto o ya expiró. Pide uno nuevo.',
+    );
+
+    const fila = await this.codigosRegistro.findOne({
+      where: { email: lowerEmail, usadoEn: IsNull() },
+      order: { creadoEn: 'DESC' },
+    });
+
+    if (!fila || fila.expiraEn < new Date()) throw invalido;
+
+    if (fila.intentos >= MAX_INTENTOS_CODIGO) {
+      throw new BadRequestException(
+        'Ese código se bloqueó por demasiados intentos. Pide uno nuevo.',
+      );
+    }
+
+    const coincide = crypto.timingSafeEqual(
+      Buffer.from(this.hashToken(codigo), 'hex'),
+      Buffer.from(fila.codigoHash, 'hex'),
+    );
+
+    if (!coincide) {
+      await this.codigosRegistro.increment({ id: fila.id }, 'intentos', 1);
+      void this.auditoria.registrar({
+        emailIntento: lowerEmail,
+        accion: 'verificacion_email',
+        detalles: { motivo: 'codigo_registro_incorrecto', intento: fila.intentos + 1 },
+        ip: this.ip(request),
+      });
+      throw invalido;
+    }
+
+    await this.codigosRegistro.update({ id: fila.id }, { usadoEn: new Date() });
+
+    const tokenRegistro = this.jwt.sign(
+      { email: lowerEmail, uso: 'registro' },
+      { expiresIn: '30m' },
+    );
+
+    void this.auditoria.registrar({
+      emailIntento: lowerEmail,
+      accion: 'verificacion_email',
+      detalles: { via: 'codigo_pre_registro' },
+      ip: this.ip(request),
+    });
+
+    return { tokenRegistro, email: lowerEmail };
+  }
+
+  /**
+   * Paso 3: crea la cuenta, ya con el correo confirmado, y abre sesión.
+   *
+   * Exige el pase del paso 2 y comprueba que sea del mismo correo: sin esa
+   * comprobación bastaría con confirmar un correo propio para después darse de
+   * alta con el de cualquier otra persona.
+   */
   async register(
     email: string,
     password: string,
     displayName: string,
+    tokenRegistro: string,
     fotoUrl?: string,
     request?: Request,
-  ): Promise<{
-    cuentaCreada: true;
-    user: PublicUser;
-    mensaje: string;
-    emailEnviadoA: string;
-    emailOk: boolean;
-  }> {
+  ): Promise<{ accessToken: string; user: PublicUser }> {
     const lowerEmail = email.toLowerCase();
 
     if (!this.passwordCumplePolitica(password)) {
@@ -111,26 +235,30 @@ export class AuthService {
       );
     }
 
-    const existing = await this.users.findByEmail(lowerEmail);
-    if (existing) {
-      // Email ya registrado: NO creamos usuario ni mandamos correo. Lanzamos
-      // 409 con un mensaje claro para que la UI pueda mostrar "ya tienes
-      // cuenta" + link a login/reset.
+    let payload: { email?: string; uso?: string };
+    try {
+      payload = this.jwt.verify(tokenRegistro);
+    } catch {
+      throw new BadRequestException(
+        'La confirmación de tu correo expiró. Vuelve a pedir el código.',
+      );
+    }
+    if (payload.uso !== 'registro' || payload.email !== lowerEmail) {
+      throw new BadRequestException('La confirmación no corresponde a este correo.');
+    }
+
+    // Alguien pudo registrarse con ese correo en los 30 minutos que el pase
+    // estuvo vivo.
+    const existente = await this.users.findByEmail(lowerEmail);
+    if (existente) {
       throw new ConflictException(
         'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.',
       );
     }
 
     const user = await this.users.create(lowerEmail, password, displayName, fotoUrl);
-    const { token, codigo } = await this.crearTokenVerificacion(user.id);
-    let emailOk = true;
-    try {
-      await this.enviarEmailVerificacion(user, token, codigo);
-    } catch {
-      // El usuario ya quedó creado; si el email falla, lo importante es no
-      // mentirle. Devolvemos emailOk=false para que la UI lo sepa.
-      emailOk = false;
-    }
+    await this.users.marcarEmailVerificado(user.id);
+    const listo = await this.users.findByIdOrThrow(user.id);
 
     void this.auditoria.registrar({
       usuarioId: user.id,
@@ -140,15 +268,9 @@ export class AuthService {
       userAgent: this.ua(request),
     });
 
-    return {
-      cuentaCreada: true,
-      user: this.toPublic(user),
-      mensaje: emailOk
-        ? `Te enviamos un código a ${user.email}.`
-        : `Cuenta creada, pero no pudimos enviar el correo a ${user.email}. Usa "Reenviar" en la siguiente pantalla.`,
-      emailEnviadoA: user.email,
-      emailOk,
-    };
+    void this.enviarBienvenida(listo);
+
+    return this.issue(listo);
   }
 
   /**

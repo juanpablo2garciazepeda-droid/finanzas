@@ -147,7 +147,7 @@ create table if not exists public.ajustes (
   saldo_inicial bigint not null default 0,
   saldo_inicial_fecha text not null default '',
   tema text not null default 'sistema' check (tema in ('claro', 'oscuro', 'sistema')),
-  acento text not null default 'azul',
+  acento text not null default 'grafito',
   dias_aviso_vencimiento integer not null default 7,
   umbral_precaucion numeric(3, 2) not null default 0.80,
   notificaciones_activas boolean not null default false,

@@ -34,7 +34,7 @@ export class Ajuste {
   @Column({ type: 'text', default: 'sistema' })
   tema!: Tema;
 
-  @Column({ type: 'text', default: 'azul' })
+  @Column({ type: 'text', default: 'grafito' })
   acento!: string;
 
   @Column({ name: 'dias_aviso_vencimiento', type: 'integer', default: 7 })

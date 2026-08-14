@@ -25,6 +25,8 @@ import {
   ActualizarPerfilDto,
   EliminarCuentaDto,
   VerificarCodigoDto,
+  SolicitarCodigoRegistroDto,
+  ConfirmarCodigoRegistroDto,
 } from './auth.dto';
 import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from './auth.service';
@@ -37,6 +39,32 @@ export class AuthController {
     private readonly users: UsersService,
   ) {}
 
+  /**
+   * Alta en tres llamadas: pedir código → canjearlo → crear la cuenta.
+   *
+   * El correo se confirma antes de que exista el usuario, así que quien
+   * abandona el alta en la contraseña no deja una cuenta huérfana detrás.
+   */
+  @Post('codigo-registro')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 4, ttl: 60_000 } })
+  solicitarCodigoRegistro(
+    @Body() body: SolicitarCodigoRegistroDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.solicitarCodigoRegistro(body.email, req);
+  }
+
+  @Post('confirmar-codigo-registro')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  confirmarCodigoRegistro(
+    @Body() body: ConfirmarCodigoRegistroDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.confirmarCodigoRegistro(body.email, body.codigo, req);
+  }
+
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -45,6 +73,7 @@ export class AuthController {
       body.email,
       body.password,
       body.displayName,
+      body.tokenRegistro,
       body.fotoUrl,
       req,
     );
