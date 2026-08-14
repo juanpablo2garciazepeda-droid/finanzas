@@ -1,0 +1,777 @@
+<title>Auditoría de Finanzas GZ</title>
+<style>
+  /* Los tokens salen de src/index.css: este reporte usa el mismo sistema
+     visual que la app de la que habla, incluido el semáforo verde/ámbar/rojo
+     como escala de severidad — que es exactamente lo que la app hace con el
+     dinero. La tipografía es la del proyecto (SF Pro en Apple, la del sistema
+     en el resto): no se enlaza ninguna fuente externa. */
+  :root {
+    --fondo: #f5f5f7;
+    --superficie: #ffffff;
+    --elevada: #f0f0f2;
+    --hundida: #e5e5ea;
+    --borde: #d2d2d7;
+    --tinta: #1d1d1f;
+    --suave: #5c5c60;
+    --tenue: #86868b;
+    --acento: #0071e3;
+    --acento-suave: #e8f2fd;
+    --verde: #1e7a35;
+    --verde-suave: #e4f2e8;
+    --ambar: #a04700;
+    --ambar-suave: #fbeee4;
+    --rojo: #c30013;
+    --rojo-suave: #fce9ea;
+    --sombra: 0 1px 3px rgba(0, 0, 0, .06), 0 8px 24px rgba(0, 0, 0, .05);
+
+    --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Tight Variable',
+      ui-sans-serif, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Tight Variable',
+      ui-sans-serif, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --fondo: #000000;
+      --superficie: #1c1c1e;
+      --elevada: #2c2c2e;
+      --hundida: #3a3a3c;
+      --borde: #38383a;
+      --tinta: #f5f5f7;
+      --suave: #aeaeb2;
+      --tenue: #8e8e93;
+      --acento: #0a84ff;
+      --acento-suave: #0a84ff26;
+      --verde: #30d158;
+      --verde-suave: #30d15821;
+      --ambar: #ff9f0a;
+      --ambar-suave: #ff9f0a21;
+      --rojo: #ff453a;
+      --rojo-suave: #ff453a21;
+      --sombra: none;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --fondo: #000000;
+    --superficie: #1c1c1e;
+    --elevada: #2c2c2e;
+    --hundida: #3a3a3c;
+    --borde: #38383a;
+    --tinta: #f5f5f7;
+    --suave: #aeaeb2;
+    --tenue: #8e8e93;
+    --acento: #0a84ff;
+    --acento-suave: #0a84ff26;
+    --verde: #30d158;
+    --verde-suave: #30d15821;
+    --ambar: #ff9f0a;
+    --ambar-suave: #ff9f0a21;
+    --rojo: #ff453a;
+    --rojo-suave: #ff453a21;
+    --sombra: none;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--fondo);
+    color: var(--tinta);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .hoja {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 48px 20px 96px;
+  }
+
+  /* ── Encabezado ─────────────────────────────────────────────────────── */
+
+  .marca {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 40px;
+  }
+  .marca svg { display: block; }
+  .marca span {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  .marca em { color: var(--acento); font-style: normal; }
+
+  .cintillo {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--acento);
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(2rem, 6vw, 2.75rem);
+    line-height: 1.06;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    text-wrap: balance;
+    margin: 10px 0 0;
+  }
+
+  .entrada {
+    font-size: clamp(1.0625rem, 2.2vw, 1.1875rem);
+    line-height: 1.55;
+    color: var(--suave);
+    max-width: 62ch;
+    margin: 18px 0 0;
+    text-wrap: pretty;
+  }
+
+  /* ── Marcador ───────────────────────────────────────────────────────── */
+
+  .marcador {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--borde);
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    overflow: hidden;
+    margin: 36px 0 0;
+  }
+  .marcador div {
+    background: var(--superficie);
+    padding: 18px 20px;
+  }
+  .marcador dt {
+    font-size: 13px;
+    color: var(--tenue);
+    margin: 0 0 4px;
+  }
+  .marcador dd {
+    font-family: var(--display);
+    font-size: 27px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+  .marcador dd small {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--tenue);
+    letter-spacing: -0.01em;
+  }
+
+  /* ── Secciones ──────────────────────────────────────────────────────── */
+
+  section { margin-top: 64px; }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(1.375rem, 3.5vw, 1.625rem);
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.032em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .sub {
+    color: var(--suave);
+    margin: 0 0 26px;
+    max-width: 64ch;
+    text-wrap: pretty;
+  }
+
+  h3 {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px;
+  }
+
+  p { margin: 0 0 14px; max-width: 68ch; text-wrap: pretty; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Alerta de portada ──────────────────────────────────────────────── */
+
+  .alerta {
+    border: 1px solid var(--rojo);
+    background: var(--rojo-suave);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-top: 36px;
+  }
+  .alerta h2 { color: var(--rojo); margin-bottom: 10px; font-size: 1.25rem; }
+  .alerta p { color: var(--tinta); }
+
+  /* ── Hallazgos ──────────────────────────────────────────────────────── */
+
+  .hallazgos {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--borde);
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .hallazgo {
+    background: var(--superficie);
+    padding: 20px 22px;
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 4px 18px;
+    align-items: start;
+  }
+  @media (max-width: 620px) {
+    .hallazgo { grid-template-columns: 1fr; gap: 10px; }
+  }
+
+  .chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .chip.critico { background: var(--rojo-suave); color: var(--rojo); }
+  .chip.alto    { background: var(--ambar-suave); color: var(--ambar); }
+  .chip.medio   { background: var(--acento-suave); color: var(--acento); }
+  .chip.bajo    { background: var(--hundida); color: var(--suave); }
+
+  .hallazgo .cuerpo p { font-size: 15px; color: var(--suave); margin: 6px 0 0; }
+  .hallazgo .cuerpo p.arreglo { color: var(--verde); }
+  .hallazgo .cuerpo p.arreglo::before { content: '→ '; }
+
+  code, .ruta {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--elevada);
+    border: 1px solid var(--borde);
+    border-radius: 5px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+
+  /* ── Listas de mejoras ──────────────────────────────────────────────── */
+
+  .bloques {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 22px 30px;
+  }
+  .bloque p { font-size: 15px; color: var(--suave); margin: 0; }
+
+  ul.limpia { margin: 0; padding: 0; list-style: none; }
+  ul.limpia li {
+    padding: 11px 0;
+    border-bottom: 1px solid var(--borde);
+    font-size: 15px;
+    color: var(--suave);
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 10px;
+    align-items: baseline;
+  }
+  ul.limpia li:last-child { border-bottom: 0; }
+  ul.limpia li b { color: var(--tinta); font-weight: 600; }
+  .paloma { color: var(--verde); font-weight: 700; }
+
+  /* ── Tabla ──────────────────────────────────────────────────────────── */
+
+  .desliza { overflow-x: auto; border-radius: 14px; border: 1px solid var(--borde); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+    background: var(--superficie);
+    min-width: 460px;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--borde);
+  }
+  th {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--tenue);
+    background: var(--elevada);
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  td.bien { color: var(--verde); font-weight: 600; }
+
+  /* ── Pasos que faltan ───────────────────────────────────────────────── */
+
+  .pasos { counter-reset: paso; display: flex; flex-direction: column; gap: 18px; }
+  .paso {
+    counter-increment: paso;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .paso::before {
+    content: counter(paso);
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    width: 30px; height: 30px;
+    display: grid; place-items: center;
+    border-radius: 999px;
+    background: var(--acento);
+    color: #fff;
+  }
+  :root[data-theme='dark'] .paso::before { color: #000; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .paso::before { color: #000; }
+  }
+  .paso pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    background: var(--elevada);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 13px 15px;
+    overflow-x: auto;
+    margin: 10px 0 0;
+  }
+  .paso code { background: none; border: 0; padding: 0; white-space: pre; }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--borde);
+    font-size: 13px;
+    color: var(--tenue);
+  }
+
+  a { color: var(--acento); }
+  a:focus-visible, :focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--acento) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+</style>
+
+<div class="hoja">
+
+  <div class="marca">
+    <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="14.5" fill="var(--acento)"></rect>
+      <path d="M14 41 A18 18 0 0 1 50 41" fill="none" stroke="#fff" stroke-opacity=".32"
+            stroke-width="6" stroke-linecap="round"></path>
+      <path d="M14 41 A18 18 0 0 1 27.4 23.6" fill="none" stroke="#fff"
+            stroke-width="6" stroke-linecap="round"></path>
+      <circle cx="32" cy="41" r="3.6" fill="#fff"></circle>
+    </svg>
+    <span>Finanzas <em>GZ</em></span>
+  </div>
+
+  <p class="cintillo">Auditoría y entrega · 14 de agosto de 2026</p>
+  <h1>La app estaba caída. Ya no.</h1>
+  <p class="entrada">
+    Lo primero que encontré no fue un detalle de diseño: era un fallo que dejaba
+    la pantalla en negro para cualquier persona que intentara entrar, en
+    cualquier dispositivo. Este es el recuento de eso y de todo lo demás — 27
+    hallazgos corregidos, el rebrand completo, la landing, el registro guiado y
+    los correos nuevos.
+  </p>
+
+  <div class="alerta">
+    <h2>Nadie podía iniciar sesión</h2>
+    <p>
+      Las cuatro pantallas públicas —login, verificar correo, olvidé mi
+      contraseña y restablecer— llamaban a <code>useAvisos()</code> fuera de
+      <code>ProveedorAvisos</code>. En React eso lanza una excepción durante el
+      render, y sin un límite de error el árbol entero se desmonta: pantalla en
+      negro, sin mensaje, sin forma de reportarlo.
+    </p>
+    <p>
+      Entró en el commit <code>e7b472c</code> y estaba en producción. Lo
+      confirmé cargando la app y leyendo la excepción en la consola del
+      navegador antes de tocar nada.
+    </p>
+  </div>
+
+  <dl class="marcador">
+    <div><dt>Hallazgos corregidos</dt><dd>27</dd></div>
+    <div><dt>Pruebas de dominio</dt><dd>166 <small>/ 166</small></dd></div>
+    <div><dt>Pruebas de API</dt><dd>20 <small>/ 20</small></dd></div>
+    <div><dt>Bundle principal</dt><dd>592 kB <small>−42 %</small></dd></div>
+  </dl>
+
+  <!-- ── Hallazgos ─────────────────────────────────────────────────────── -->
+
+  <section>
+    <h2>Qué estaba mal</h2>
+    <p class="sub">
+      Ordenado por lo que costaba, no por lo que costaba arreglarlo. Todo lo de
+      esta lista está corregido y verificado.
+    </p>
+
+    <div class="hallazgos">
+
+      <div class="hallazgo">
+        <span class="chip critico">Crítico</span>
+        <div class="cuerpo">
+          <h3>El login reventaba en blanco</h3>
+          <p>Cuatro pantallas públicas usaban un contexto que solo existía dentro de la sesión.</p>
+          <p class="arreglo">Los proveedores de avisos e idioma envuelven ahora las dos ramas de la app.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip critico">Crítico</span>
+        <div class="cuerpo">
+          <h3>Un error de render dejaba pantalla negra</h3>
+          <p>No había ningún límite de error en el árbol: cualquier excepción borraba la interfaz completa sin dejar rastro visible.</p>
+          <p class="arreglo">Nuevo <code>LimiteDeError</code>: muestra qué pasó, con botones de recargar y volver al inicio.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip alto">Alto</span>
+        <div class="cuerpo">
+          <h3>Verificar el correo quemaba el token en bucle</h3>
+          <p>El objeto <code>auth</code> se recreaba en cada render y el efecto dependía de él, así que la pantalla reenviaba el token sin parar: el primer intento lo consumía y todos los siguientes fallaban. Una verificación correcta terminaba mostrando un error.</p>
+          <p class="arreglo">Contexto memoizado y candado por token: se canjea una sola vez.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip alto">Alto</span>
+        <div class="cuerpo">
+          <h3>Seis recursos del backend no validaban absolutamente nada</h3>
+          <p>Transacciones, deudas, metas, categorías, presupuestos y ajustes recibían <code>DeepPartial&lt;T&gt;</code>, que en tiempo de ejecución es <code>Object</code>: el <code>ValidationPipe</code> de Nest se salta la validación. Se aceptaba un monto de <code>"hola"</code>, un tipo inventado o una nota de diez megabytes.</p>
+          <p class="arreglo">DTOs con <code>class-validator</code> en los seis. 14 casos maliciosos probados, todos devuelven 400 con el campo señalado.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip alto">Alto</span>
+        <div class="cuerpo">
+          <h3>El umbral de precaución llegaba siempre en cero</h3>
+          <p>Es una fracción (0.80 = "avísame al 80 %") pero pasaba por el conversor de centavos, que trunca a entero. Resultado: cualquier presupuesto salía en ámbar desde el primer peso gastado.</p>
+          <p class="arreglo">Se manda como decimal y el DTO valida el rango 0–1. Verificado en la base: guarda <code>0.75</code>.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip alto">Alto</span>
+        <div class="cuerpo">
+          <h3>Borrar algo ajeno devolvía 500</h3>
+          <p>El servicio genérico lanzaba <code>new Error('not found')</code>, que Nest convierte en "Internal server error". Pedir un registro de otra cuenta devolvía 200 con el cuerpo vacío.</p>
+          <p class="arreglo">Ahora es 404 en los tres verbos. No filtraba datos —lo verifiqué con dos cuentas— pero mentía sobre lo que había.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip medio">Medio</span>
+        <div class="cuerpo">
+          <h3>Un tercio de los avatares era un círculo invisible</h3>
+          <p>El color se sacaba de un hash del nombre contra las clases <code>bg-rosa</code> y <code>bg-morado</code>, que no existen en el tema: letra blanca sobre el fondo de la página.</p>
+          <p class="arreglo">Componente <code>Avatar</code> único, con el par acento/sobre-acento que sí garantiza contraste en ambos temas.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip medio">Medio</span>
+        <div class="cuerpo">
+          <h3>"Vence en 1 días"</h3>
+          <p>Cuatro sitios del dominio concatenaban "días" sin concordar. En una app que presume de calcular bien, es de las cosas que más credibilidad quitan.</p>
+          <p class="arreglo">Helper <code>enDias()</code> con pruebas, aplicado en todos. También en los correos ("1 ingreso").</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip medio">Medio</span>
+        <div class="cuerpo">
+          <h3>El cliente podía fabricar categorías imborrables</h3>
+          <p>La bandera <code>esSistema</code> se aceptaba tal cual del cuerpo de la petición, y la interfaz protege de borrado a las categorías de sistema.</p>
+          <p class="arreglo">La fija el servidor. Un <code>PATCH</code> tampoco puede ascender una categoría.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip medio">Medio</span>
+        <div class="cuerpo">
+          <h3>Medio megabyte de librería de PDF en el arranque</h3>
+          <p><code>pdf.ts</code> se importaba de forma dinámica <em>y</em> estática en el mismo archivo, así que jsPDF y html2canvas caían en el bundle inicial de todos modos.</p>
+          <p class="arreglo">Solo dinámico. El bundle principal pasó de 1 026 kB a 592 kB.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip bajo">Menor</span>
+        <div class="cuerpo">
+          <h3>Una fuente completa descargada para nada</h3>
+          <p>Space Grotesk se importaba en <code>main.tsx</code> pero ninguna regla de CSS la mencionaba.</p>
+          <p class="arreglo">Fuera el import y fuera la dependencia.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip bajo">Menor</span>
+        <div class="cuerpo">
+          <h3>Cifras con y sin centavos en la misma tarjeta</h3>
+          <p>El medidor mostraba <span class="ruta">$1,830</span> y la razón justo debajo <span class="ruta">$1,830.00</span>: se lee como dos cuentas distintas.</p>
+          <p class="arreglo">Un solo criterio en todo el dominio. Los centavos siguen intactos por dentro.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip bajo">Menor</span>
+        <div class="cuerpo">
+          <h3>El onboarding salía descentrado</h3>
+          <p>Pedía la altura completa de la ventana estando dentro de un layout que ya tiene encabezado y barra inferior: media pantalla en blanco arriba.</p>
+          <p class="arreglo">Se acopla al layout que lo contiene.</p>
+        </div>
+      </div>
+
+      <div class="hallazgo">
+        <span class="chip bajo">Menor</span>
+        <div class="cuerpo">
+          <h3>Documentación y código muerto</h3>
+          <p>El README seguía diciendo "no hay servidor, no hay cuenta, no sale un solo dato del dispositivo" y describía IndexedDB, Dexie y un PIN que ya no existen. Había imports sin usar en ocho archivos y lógica de fortaleza de contraseña copiada en tres, con criterios distintos: una escala de cinco etiquetas sobre cuatro barras hacía inalcanzable el nivel más alto.</p>
+          <p class="arreglo">README reescrito, imports limpios y un único <code>FortalezaPassword</code> alineado con la política del backend.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Lo nuevo ──────────────────────────────────────────────────────── -->
+
+  <section>
+    <h2>Lo que le faltaba</h2>
+    <p class="sub">
+      Además de arreglar, agregué lo que pediste y lo que la auditoría dejó
+      claro que hacía falta para poder abrir la puerta a gente real.
+    </p>
+
+    <div class="bloques">
+      <div class="bloque">
+        <h3>Landing con la app funcionando</h3>
+        <p>
+          El héroe no es una captura ni una lista de virtudes: es el motor de
+          alertas real corriendo sobre un escenario de ejemplo. Escribes un
+          monto y recibes el mismo veredicto, con las mismas razones, que
+          tendrías con tu cuenta abierta. El fondo se tiñe del color del
+          semáforo. Y muestra la fórmula del margen libre completa, sin
+          esconder nada.
+        </p>
+      </div>
+
+      <div class="bloque">
+        <h3>Registro de una pregunta por pantalla</h3>
+        <p>
+          Nombre, correo, contraseña, foto y código: cinco pasos en vez de un
+          formulario de nueve controles. Cada pantalla valida lo suyo en el
+          momento, y el error aparece junto al campo que lo provocó. Si el
+          correo ya tiene cuenta, vista dedicada con salida a login o a
+          recuperar contraseña.
+        </p>
+      </div>
+
+      <div class="bloque">
+        <h3>Verificación por código de 6 dígitos</h3>
+        <p>
+          El correo casi nunca se abre en el mismo aparato donde uno se
+          registra. Con código se teclea en la pestaña que ya está abierta; el
+          enlace sigue funcionando para quien lo tenga a mano. Se guarda
+          hasheado, vence en 30 minutos, muere a los 6 intentos fallidos y al
+          canjearlo abre sesión directo.
+        </p>
+      </div>
+
+      <div class="bloque">
+        <h3>Foto de perfil</h3>
+        <p>
+          Se recorta al centro y se reescala a 256×256 en el navegador: sale de
+          la cámara con 4 MB y llega al servidor con unos 25 KB. Se rechazan
+          SVG —ejecutan script— y cualquier URL remota. Editable desde Ajustes,
+          con la inicial como respaldo.
+        </p>
+      </div>
+
+      <div class="bloque">
+        <h3>Correos con marca</h3>
+        <p>
+          Cuatro plantillas rehechas: verificación, bienvenida, restablecer
+          contraseña y resumen semanal. Tablas y estilos en línea porque Outlook
+          usa el motor de Word y Gmail borra el <code>&lt;style&gt;</code> del
+          encabezado. Sin imágenes remotas: un logotipo que empieza roto no es
+          un logotipo.
+        </p>
+      </div>
+
+      <div class="bloque">
+        <h3>Finanzas GZ en todas partes</h3>
+        <p>
+          Interfaz, título de la pestaña, manifiesto de la app, correos, README,
+          nombres de archivo exportados y los identificadores de Traefik en los
+          dos compose. Símbolo nuevo: el mismo medidor que preside el tablero.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Verificación ──────────────────────────────────────────────────── -->
+
+  <section>
+    <h2>Cómo lo verifiqué</h2>
+    <p class="sub">
+      Levanté Postgres 16 en Docker, apliqué el esquema y las cuatro
+      migraciones, corrí el backend contra esa base con los correos saliendo por
+      consola y recorrí el flujo completo en el navegador.
+    </p>
+
+    <div class="desliza">
+      <table>
+        <thead>
+          <tr><th>Prueba</th><th>Resultado</th><th class="num">Cifra</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Pruebas del dominio (<code>vitest</code>)</td><td class="bien">Pasan</td><td class="num">166 / 166</td></tr>
+          <tr><td>Pruebas de API contra el backend real</td><td class="bien">Pasan</td><td class="num">20 / 20</td></tr>
+          <tr><td>Typecheck de frontend y backend</td><td class="bien">Limpio</td><td class="num">0 errores</td></tr>
+          <tr><td>Lint (<code>oxlint</code>)</td><td class="bien">Limpio</td><td class="num">0 errores</td></tr>
+          <tr><td>Build de producción</td><td class="bien">Correcto</td><td class="num">592 kB</td></tr>
+          <tr><td>Esquema + 4 migraciones desde cero</td><td class="bien">Aplican</td><td class="num">14 tablas</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:26px">Recorridos a mano en el navegador, a 390 px y a 1440 px:</p>
+    <ul class="limpia">
+      <li><span class="paloma">✓</span><span><b>Alta completa</b> — los cinco pasos, correo con el código en el log, cuenta creada, 17 categorías sembradas por el trigger y correo de bienvenida enviado.</span></li>
+      <li><span class="paloma">✓</span><span><b>Código incorrecto</b> — mensaje claro y el contador de intentos sube a 1 en la base de datos.</span></li>
+      <li><span class="paloma">✓</span><span><b>Código correcto</b> — sesión abierta y salida al onboarding sin volver a pedir la contraseña.</span></li>
+      <li><span class="paloma">✓</span><span><b>Aislamiento entre cuentas</b> — con dos usuarios reales: leer, editar y borrar registros ajenos devuelve 404 y el registro sigue intacto.</span></li>
+      <li><span class="paloma">✓</span><span><b>Foto de perfil</b> — se guarda, se ve en el avatar del encabezado y en Ajustes; SVG y URLs remotas rechazados con 400.</span></li>
+      <li><span class="paloma">✓</span><span><b>Tablero con datos reales</b> — 10 movimientos, 5 presupuestos, 3 deudas y 2 metas; margen, semáforo, próximos pagos, recomendaciones y gráficas coherentes.</span></li>
+      <li><span class="paloma">✓</span><span><b>Los tres correos</b> renderizados y revisados uno por uno.</span></li>
+    </ul>
+
+    <p style="margin-top:22px; color:var(--suave); font-size:15px">
+      Al terminar borré el contenedor de Postgres y los datos de prueba. No
+      toqué la base de producción ni se envió ningún correo real.
+    </p>
+  </section>
+
+  <!-- ── Lo que falta ──────────────────────────────────────────────────── -->
+
+  <section>
+    <h2>Lo que falta hacer tú</h2>
+    <p class="sub">
+      El código está listo y commiteado en la rama
+      <code>auditoria-finanzas-gz</code>. Para que llegue a producción faltan
+      estos pasos, en este orden.
+    </p>
+
+    <div class="pasos">
+
+      <div class="paso">
+        <div>
+          <h3>Aplica la migración antes de desplegar</h3>
+          <p>
+            Sin ella, el registro nuevo falla: el backend escribirá en columnas
+            que aún no existen. Es aditiva —solo <code>ADD COLUMN IF NOT
+            EXISTS</code>— y correrla dos veces no rompe nada.
+          </p>
+          <pre><code>psql "$DATABASE_URL" \
+  -f apps/backend/sql/migracion-2026-08-14-registro-v3.sql</code></pre>
+        </div>
+      </div>
+
+      <div class="paso">
+        <div>
+          <h3>Revisa las variables de entorno del backend</h3>
+          <p>
+            <code>APP_URL</code> es la que arma los enlaces de los correos; si
+            apunta mal, el botón de confirmar lleva a ninguna parte. Y
+            <code>EMAIL_MODE</code> tiene que ser <code>smtp</code> en
+            producción: en <code>console</code> los códigos se quedan en el log
+            y nadie puede activar su cuenta.
+          </p>
+          <pre><code>APP_URL=https://finanzasgz.com.mx
+EMAIL_MODE=smtp
+SMTP_FROM="Finanzas GZ &lt;no-reply@finanzasgz.com.mx&gt;"
+CORS_ORIGINS=https://finanzasgz.com.mx</code></pre>
+        </div>
+      </div>
+
+      <div class="paso">
+        <div>
+          <h3>Vuelve a aplicar los dos compose</h3>
+          <p>
+            Renombré los routers y servicios de Traefik de
+            <code>juanpa-finanzas</code> a <code>finanzas-gz</code>. Las reglas
+            de dominio no cambian, así que el sitio sigue respondiendo igual,
+            pero Dokploy necesita releer los archivos para crear los routers
+            nuevos y retirar los viejos.
+          </p>
+        </div>
+      </div>
+
+      <div class="paso">
+        <div>
+          <h3>Confirma que SPF, DKIM y DMARC estén puestos</h3>
+          <p>
+            Es lo que decide si los correos entran a la bandeja o a spam, y no
+            lo puedo verificar desde aquí. Con verificación por código, un
+            correo en spam es una cuenta que nunca se activa.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Pendientes ────────────────────────────────────────────────────── -->
+
+  <section>
+    <h2>Lo que dejé anotado y no toqué</h2>
+    <p class="sub">
+      Cosas que encontré, que hoy no rompen nada, y que cambian de tamaño
+      cuando la app tenga usuarios de verdad. Ninguna es urgente.
+    </p>
+
+    <ul class="limpia">
+      <li><span class="paloma">·</span><span><b>El tablero hace once peticiones por carga.</b> <code>cargarTodo()</code> pide los pagos de cada deuda y los aportes de cada meta por separado. Con tres deudas y dos metas son once llamadas; con veinte deudas hará falta un endpoint que las devuelva en bloque.</span></li>
+      <li><span class="paloma">·</span><span><b>El límite de peticiones es por IP, no por cuenta.</b> Son 100 por minuto: de sobra para una persona, pero varias detrás del mismo NAT —una oficina, una operadora móvil— se lo reparten. Lo topé sembrando datos de prueba.</span></li>
+      <li><span class="paloma">·</span><span><b>Sin conexión no hay app.</b> Todo se lee de la API en cada arranque; no hay caché local ni cola de escrituras pendientes. Para una app pensada para usarse en la caja del súper, vale la pena considerarlo.</span></li>
+      <li><span class="paloma">·</span><span><b>El diccionario de i18n cubre unas 40 cadenas.</b> El resto de la interfaz está en español fijo, así que cambiar a inglés hoy traduce los menús pero no las pantallas.</span></li>
+      <li><span class="paloma">·</span><span><b>Los recordatorios no son push reales.</b> Se disparan la primera vez que abres la app cada día, no a una hora fija. Ya estaba documentado y sigue igual.</span></li>
+      <li><span class="paloma">·</span><span><b>No hay pruebas automatizadas de interfaz.</b> Las 166 cubren el dominio, que es lo que más importa, pero el fallo que tumbó el login era de composición de componentes y ninguna prueba lo habría atrapado.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    Finanzas GZ · Rama <code>auditoria-finanzas-gz</code>, commit
+    <code>c84069f</code> · 58 archivos, +3 477 / −995 líneas
+  </footer>
+
+</div>
