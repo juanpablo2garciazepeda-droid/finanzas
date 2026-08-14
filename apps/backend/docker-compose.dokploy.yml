@@ -16,6 +16,14 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://finanzasgz.com.mx}
+      APP_URL: ${APP_URL:-https://finanzasgz.com.mx}
+      EMAIL_MODE: ${EMAIL_MODE:-console}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Juanpa Finanzas <no-reply@finanzasgz.com.mx>}
     networks:
       - dokploy-network
       - default
