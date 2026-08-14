@@ -11,6 +11,7 @@ import { api, borrarToken, guardarToken, obtenerToken } from '@/api/cliente'
 export interface Usuario {
   id: string
   email: string
+  displayName: string
 }
 
 export interface AuthEstado {
@@ -32,7 +33,13 @@ const Contexto = createContext<AuthEstado | null>(null)
 
 interface SesionRespuesta {
   accessToken: string
-  user: Usuario
+  user: { id: string; email: string }
+}
+
+interface MeRespuesta {
+  id: string
+  email: string
+  displayName: string
 }
 
 export function ProveedorAuth({ children }: { children: ReactNode }) {
@@ -49,10 +56,14 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       return
     }
     api
-      .get<{ id: string; email: string }>('/auth/me')
+      .get<MeRespuesta>('/auth/me')
       .then((res) => {
         if (res.ok && res.data) {
-          setUsuario({ id: res.data.id, email: res.data.email })
+          setUsuario({
+            id: res.data.id,
+            email: res.data.email,
+            displayName: res.data.displayName,
+          })
         } else if (res.status === 401) {
           borrarToken()
         }
@@ -64,7 +75,15 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     const res = await api.post<SesionRespuesta>('/auth/login', { email, password })
     if (!res.ok || !res.data) return { ok: false, error: res.error }
     guardarToken(res.data.accessToken)
-    setUsuario(res.data.user)
+    // El login solo trae id+email; el displayName viene de /auth/me.
+    const me = await api.get<MeRespuesta>('/auth/me')
+    if (me.ok && me.data) {
+      setUsuario({
+        id: me.data.id,
+        email: me.data.email,
+        displayName: me.data.displayName,
+      })
+    }
     return { ok: true, error: null }
   }, [])
 
@@ -72,7 +91,14 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     const res = await api.post<SesionRespuesta>('/auth/register', { email, password, displayName })
     if (!res.ok || !res.data) return { ok: false, error: res.error }
     guardarToken(res.data.accessToken)
-    setUsuario(res.data.user)
+    const me = await api.get<MeRespuesta>('/auth/me')
+    if (me.ok && me.data) {
+      setUsuario({
+        id: me.data.id,
+        email: me.data.email,
+        displayName: me.data.displayName,
+      })
+    }
     return { ok: true, error: null }
   }, [])
 

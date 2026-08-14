@@ -416,6 +416,8 @@ export async function actualizarCategoria(id: string, cambios: Partial<Categoria
 /** En el backend el borrado es duro. La lógica de "archivar si tiene uso" se
  *  mueve al frontend: primero preguntamos, después decidimos. */
 export async function eliminarCategoria(id: string): Promise<'eliminada' | 'archivada'> {
+  // Traemos todas las transacciones del usuario para contar usos. El backend
+  // aún no expone un endpoint con ?categoriaId, pero son pocas filas.
   const lista = await api.get<ApiTransaccion[]>('/transacciones')
   const usos = lista.ok && lista.data ? lista.data.filter((t) => t.categoriaId === id).length : 0
   if (usos > 0) {
@@ -451,12 +453,11 @@ export async function fijarPresupuesto(
   periodo: string,
   montoLimite: number,
 ): Promise<void> {
-  // El backend no filtra por query string, así que traemos todos y filtramos
-  // en cliente. En la práctica son pocas filas por usuario, no es problema.
-  const lista = await api.get<ApiPresupuesto[]>('/presupuestos')
+  // El backend ya filtra por query string: ?periodo=YYYY-MM.
+  const lista = await api.get<ApiPresupuesto[]>(`/presupuestos?periodo=${periodo}`)
   const existente =
     lista.ok && lista.data
-      ? lista.data.find((p) => p.categoriaId === categoriaId && p.periodo === periodo)
+      ? lista.data.find((p) => p.categoriaId === categoriaId)
       : undefined
 
   if (montoLimite <= 0) {
@@ -479,13 +480,15 @@ export async function eliminarPresupuesto(id: string): Promise<void> {
 }
 
 export async function copiarPresupuestos(desde: string, hacia: string): Promise<number> {
-  const lista = await api.get<ApiPresupuesto[]>('/presupuestos')
-  if (!lista.ok || !lista.data) return 0
-  const origen = lista.data.filter((p) => p.periodo === desde)
+  const [origen, destino] = await Promise.all([
+    api.get<ApiPresupuesto[]>(`/presupuestos?periodo=${desde}`),
+    api.get<ApiPresupuesto[]>(`/presupuestos?periodo=${hacia}`),
+  ])
+  if (!origen.ok || !origen.data) return 0
   const yaDefinidas = new Set(
-    lista.data.filter((p) => p.periodo === hacia).map((p) => p.categoriaId),
+    destino.ok && destino.data ? destino.data.map((p) => p.categoriaId) : [],
   )
-  const nuevos = origen.filter((p) => !yaDefinidas.has(p.categoriaId))
+  const nuevos = origen.data.filter((p) => !yaDefinidas.has(p.categoriaId))
   for (const p of nuevos) {
     await api.post('/presupuestos', {
       categoriaId: p.categoriaId,
@@ -535,11 +538,7 @@ export async function registrarPago(
 }
 
 export async function eliminarPago(pagoId: string): Promise<void> {
-  // El backend no expone DELETE /pagos/:id; habría que añadirlo. Mientras
-  // tanto, lo dejamos como no-op (un "borrar" local del frontend sin impacto
-  // en el servidor es preferible a un error silencioso). Esto se documenta
-  // para v2.
-  void pagoId
+  await api.delete(`/deudas/pagos/${pagoId}`)
 }
 
 // ─── Metas ─────────────────────────────────────────────────────────────────
@@ -590,8 +589,7 @@ export async function registrarAporte(
 }
 
 export async function eliminarAporte(aporteId: string): Promise<void> {
-  // Igual que eliminarPago: el endpoint de borrado no existe todavía.
-  void aporteId
+  await api.delete(`/metas/aportes/${aporteId}`)
 }
 
 export async function reordenarMetas(idsEnOrden: string[]): Promise<void> {
