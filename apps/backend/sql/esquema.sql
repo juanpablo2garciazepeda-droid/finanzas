@@ -46,6 +46,7 @@ create table if not exists public.categorias (
   es_sistema boolean not null default false,
   archivada boolean not null default false,
   orden integer not null default 0,
+  creado_en timestamptz not null default now(),
   actualizado_en timestamptz not null default now()
 );
 
@@ -70,6 +71,7 @@ create table if not exists public.presupuestos (
   categoria_id uuid,
   monto_limite bigint not null check (monto_limite >= 0),
   periodo text not null check (periodo ~ '^\d{4}-\d{2}$'),
+  creado_en timestamptz not null default now(),
   actualizado_en timestamptz not null default now()
 );
 
@@ -97,6 +99,7 @@ create table if not exists public.pagos_deuda (
   monto bigint not null check (monto >= 0),
   fecha text not null check (fecha ~ '^\d{4}-\d{2}-\d{2}$'),
   nota text not null default '',
+  creado_en timestamptz not null default now(),
   actualizado_en timestamptz not null default now()
 );
 
@@ -122,6 +125,7 @@ create table if not exists public.aportes_meta (
   monto bigint not null check (monto >= 0),
   fecha text not null check (fecha ~ '^\d{4}-\d{2}-\d{2}$'),
   nota text not null default '',
+  creado_en timestamptz not null default now(),
   actualizado_en timestamptz not null default now()
 );
 
