@@ -27,7 +27,10 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # SPA-friendly default vhost: try the file, then fall back to /index.html so
 # React Router URLs (e.g. /presupuestos) don't 404 on direct nav/refresh.
-# gzip + immutable caching for the hashed asset bundle.
+# Cache strategy:
+#   - index.html: NO cache (el bundle cambia en cada deploy y no queremos
+#     que un iOS con PWA sirva la versión vieja)
+#   - assets: 30 días inmutables (sus nombres tienen hash, son seguros de cachear)
 RUN cat > /etc/nginx/conf.d/default.conf <<'NGINX'
 server {
     listen 80;
@@ -35,13 +38,29 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # El index nunca se cachea: cada deploy cambia el bundle.
+    location = / {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        try_files /index.html =404;
+    }
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+    }
+    location = /manifest.webmanifest {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    # El resto de las rutas del SPA caen al index sin cache.
     location / {
         try_files $uri $uri/ /index.html;
     }
 
+    # Los assets con hash son seguros de cachear por un año.
     location ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|webp|ico|json|webmanifest)$ {
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
+        expires 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable";
         try_files $uri =404;
     }
 

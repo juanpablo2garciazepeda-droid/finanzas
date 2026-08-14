@@ -68,6 +68,24 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
   const guardarAjustes = useCallback(async (cambios: Partial<Ajustes>) => {
     const nuevos = await guardarAjustesApi(cambios)
     setDatos((prev) => (prev ? { ...prev, ajustes: nuevos } : prev))
+    // Aplicar el tema/acento al DOM de inmediato, sin esperar a que el
+    // useEffect de useAplicarApariencia dispare en el siguiente render.
+    // Esto garantiza que cambiar tema se vea AL INSTANTE en cualquier
+    // parte de la app, no solo en componentes que re-renderizan por
+    // el cambio de context.
+    if (typeof document !== 'undefined') {
+      const raiz = document.documentElement
+      if (nuevos.tema === 'sistema') raiz.removeAttribute('data-tema')
+      else raiz.setAttribute('data-tema', nuevos.tema)
+      raiz.setAttribute('data-acento', nuevos.acento)
+      try {
+        localStorage.setItem('finanzas.tema', nuevos.tema)
+        localStorage.setItem('finanzas.acento', nuevos.acento)
+      } catch {
+        // localStorage puede no estar disponible; el tema igual queda
+        // en la sesión actual por el atributo del DOM.
+      }
+    }
   }, [])
 
   useEffect(() => {

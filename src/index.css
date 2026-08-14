@@ -209,6 +209,10 @@
     -webkit-text-size-adjust: 100%;
     /* Que los controles nativos (calendarios, selects) sigan al tema. */
     color-scheme: light;
+    /* Sin scroll horizontal accidental: si algo se desborda, se recorta
+       en vez de empujar el ancho de la página y forzar al usuario a
+       pellizcar para hacer zoom out en móvil. */
+    overflow-x: hidden;
   }
 
   :root[data-tema='oscuro'] {
