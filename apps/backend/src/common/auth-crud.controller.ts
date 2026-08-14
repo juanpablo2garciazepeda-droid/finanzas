@@ -30,8 +30,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 export abstract class AuthCrudService<Entity extends { userId: string }> {
   protected abstract get repo(): Repository<Entity>;
 
-  list(userId: string): Promise<Entity[]> {
-    return this.repo.find({ where: { userId } as FindOptionsWhere<Entity> });
+  list(userId: string, extra: FindOptionsWhere<Entity> = {}): Promise<Entity[]> {
+    return this.repo.find({
+      where: { ...extra, userId } as FindOptionsWhere<Entity>,
+    });
   }
 
   findOne(userId: string, id: string): Promise<Entity | null> {

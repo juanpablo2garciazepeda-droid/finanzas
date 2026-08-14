@@ -36,4 +36,11 @@ export class DeudasService extends AuthCrudService<Deuda> {
       this.pagosRepo.create({ ...input, userId, deudaId }),
     );
   }
+
+  async removePago(userId: string, pagoId: string): Promise<void> {
+    const result = await this.pagosRepo.delete({ id: pagoId, userId });
+    if (!result.affected) {
+      throw new Error('not found');
+    }
+  }
 }

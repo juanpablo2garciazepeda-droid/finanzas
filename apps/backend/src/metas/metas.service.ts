@@ -36,4 +36,11 @@ export class MetasService extends AuthCrudService<Meta> {
       this.aportesRepo.create({ ...input, userId, metaId }),
     );
   }
+
+  async removeAporte(userId: string, aporteId: string): Promise<void> {
+    const result = await this.aportesRepo.delete({ id: aporteId, userId });
+    if (!result.affected) {
+      throw new Error('not found');
+    }
+  }
 }

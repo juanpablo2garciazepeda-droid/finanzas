@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -14,7 +15,7 @@ import { PresupuestosService } from './presupuestos.service';
 import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from '../auth/auth.service';
 import { Presupuesto } from './presupuesto.entity';
-import { DeepPartial } from 'typeorm';
+import { DeepPartial, FindOptionsWhere } from 'typeorm';
 
 @Controller('presupuestos')
 @UseGuards(AuthGuard('jwt'))
@@ -22,8 +23,13 @@ export class PresupuestosController {
   constructor(private readonly service: PresupuestosService) {}
 
   @Get()
-  list(@CurrentUser() user: JwtPayload) {
-    return this.service.list(user.sub);
+  list(
+    @CurrentUser() user: JwtPayload,
+    @Query('periodo') periodo?: string,
+  ) {
+    const where: FindOptionsWhere<Presupuesto> = {};
+    if (periodo) where.periodo = periodo;
+    return this.service.list(user.sub, where);
   }
 
   @Get(':id')

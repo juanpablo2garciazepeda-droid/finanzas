@@ -12,10 +12,14 @@ import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './auth.dto';
 import { CurrentUser } from '../common/current-user.decorator';
 import { JwtPayload } from './auth.service';
+import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -31,7 +35,12 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
-  me(@CurrentUser() user: JwtPayload) {
-    return { id: user.sub, email: user.email };
+  async me(@CurrentUser() user: JwtPayload) {
+    const u = await this.users.findById(user.sub);
+    return {
+      id: user.sub,
+      email: user.email,
+      displayName: u?.displayName ?? '',
+    };
   }
 }

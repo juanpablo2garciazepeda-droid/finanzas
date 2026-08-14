@@ -73,4 +73,12 @@ export class DeudasController {
   ) {
     return this.service.addPago(user.sub, id, input);
   }
+
+  @Delete('pagos/:pagoId')
+  removePago(
+    @CurrentUser() user: JwtPayload,
+    @Param('pagoId', new ParseUUIDPipe()) pagoId: string,
+  ) {
+    return this.service.removePago(user.sub, pagoId);
+  }
 }

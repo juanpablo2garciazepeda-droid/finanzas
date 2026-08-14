@@ -198,13 +198,23 @@ begin
 
   insert into public.categorias (id, user_id, nombre, tipo, icono, color, es_sistema, orden)
   values
-    (gen_random_uuid(), new.id, 'Comida',        'egreso',  'Utensils',   '#BC670D', true, 0),
-    (gen_random_uuid(), new.id, 'Transporte',    'egreso',  'Car',        '#0071E3', true, 1),
-    (gen_random_uuid(), new.id, 'Renta',         'egreso',  'House',      '#7968EB', true, 2),
-    (gen_random_uuid(), new.id, 'Servicios',     'egreso',  'Zap',        '#B25000', true, 3),
-    (gen_random_uuid(), new.id, 'Salud',         'egreso',  'HeartPulse', '#D70015', true, 4),
-    (gen_random_uuid(), new.id, 'Suscripciones', 'egreso',  'Repeat',     '#C9186B', true, 5),
-    (gen_random_uuid(), new.id, 'Sueldo',        'ingreso', 'Briefcase',  '#10924B', true, 6);
+    (gen_random_uuid(), new.id, 'Comida',          'egreso',  'Utensils',       '#BC670D', true,  0),
+    (gen_random_uuid(), new.id, 'Súper',           'egreso',  'ShoppingCart',   '#90790C', true,  1),
+    (gen_random_uuid(), new.id, 'Transporte',      'egreso',  'Car',            '#0F84D8', true,  2),
+    (gen_random_uuid(), new.id, 'Renta',           'egreso',  'House',          '#7968EB', true,  3),
+    (gen_random_uuid(), new.id, 'Servicios',       'egreso',  'Zap',            '#139EA0', true,  4),
+    (gen_random_uuid(), new.id, 'Entretenimiento', 'egreso',  'Clapperboard',   '#C149AC', true,  5),
+    (gen_random_uuid(), new.id, 'Salud',           'egreso',  'HeartPulse',     '#10924B', true,  6),
+    (gen_random_uuid(), new.id, 'Educación',       'egreso',  'GraduationCap',  '#0F84D8', true,  7),
+    (gen_random_uuid(), new.id, 'Compras',         'egreso',  'ShoppingBag',    '#E2484F', true,  8),
+    (gen_random_uuid(), new.id, 'Suscripciones',   'egreso',  'Repeat',         '#10924B', true,  9),
+    (gen_random_uuid(), new.id, 'Mascotas',        'egreso',  'PawPrint',       '#C149AC', true, 10),
+    (gen_random_uuid(), new.id, 'Otros gastos',    'egreso',  'Ellipsis',       '#90790C', true, 11),
+    (gen_random_uuid(), new.id, 'Sueldo',          'ingreso', 'Briefcase',      '#10924B', true, 12),
+    (gen_random_uuid(), new.id, 'Freelance',       'ingreso', 'Laptop',         '#139EA0', true, 13),
+    (gen_random_uuid(), new.id, 'Ventas',          'ingreso', 'Store',          '#90790C', true, 14),
+    (gen_random_uuid(), new.id, 'Regalos',         'ingreso', 'Gift',           '#C149AC', true, 15),
+    (gen_random_uuid(), new.id, 'Otros ingresos',  'ingreso', 'Ellipsis',       '#0F84D8', true, 16);
 
   return new;
 end $$;

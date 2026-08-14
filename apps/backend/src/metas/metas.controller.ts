@@ -73,4 +73,12 @@ export class MetasController {
   ) {
     return this.service.addAporte(user.sub, id, input);
   }
+
+  @Delete('aportes/:aporteId')
+  removeAporte(
+    @CurrentUser() user: JwtPayload,
+    @Param('aporteId', new ParseUUIDPipe()) aporteId: string,
+  ) {
+    return this.service.removeAporte(user.sub, aporteId);
+  }
 }
