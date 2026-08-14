@@ -62,12 +62,24 @@ export class AuthService {
 
   // ── Registro ─────────────────────────────────────────────────────────────
 
+  /**
+   * Resultado del registro. La UI distingue tres casos:
+   *   - `cuentaCreada: true` → "te enviamos correo" + opción de reenviar
+   *   - `cuentaCreada: false` → "ya está registrado, ¿quieres login o reset?"
+   *   - throw BadRequest → contraseña no cumple política
+   *   - throw Throttler → demasiados intentos
+   *
+   * El status HTTP también diferencia: 201 cuando se crea, 200 cuando ya
+   * existía. El mensaje genérico estilo "si el correo no estaba registrado..."
+   * era confuso para usuarios reales: pensaban que les iba a llegar y no
+   * llegaba, y no sabían si tenían que esperar o si algo estaba mal.
+   */
   async register(
     email: string,
     password: string,
     displayName: string,
     request?: Request,
-  ): Promise<{ user: PublicUser; mensaje: string }> {
+  ): Promise<{ cuentaCreada: true; user: PublicUser; mensaje: string; emailEnviadoA: string }> {
     const lowerEmail = email.toLowerCase();
 
     if (!this.passwordCumplePolitica(password)) {
@@ -78,16 +90,24 @@ export class AuthService {
 
     const existing = await this.users.findByEmail(lowerEmail);
     if (existing) {
-      // Mensaje genérico: no decimos "ya existe" para no confirmar correos
-      // ajenos. Pero para evitar doble envío al mismo dev, no creamos nada.
+      // Email ya registrado: NO creamos usuario ni mandamos correo. Lanzamos
+      // 409 con un mensaje claro para que la UI pueda mostrar "ya tienes
+      // cuenta" + link a login/reset.
       throw new ConflictException(
-        'Si el correo no estaba registrado, te enviamos un email de verificación.',
+        'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.',
       );
     }
 
     const user = await this.users.create(lowerEmail, password, displayName);
     const token = await this.crearTokenVerificacion(user.id);
-    await this.enviarEmailVerificacion(user, token);
+    let emailOk = true
+    try {
+      await this.enviarEmailVerificacion(user, token)
+    } catch {
+      // El usuario ya quedó creado; si el email falla, lo importante es no
+      // mentirle. Devolvemos emailOk=false para que la UI lo sepa.
+      emailOk = false
+    }
 
     void this.auditoria.registrar({
       usuarioId: user.id,
@@ -98,8 +118,12 @@ export class AuthService {
     });
 
     return {
+      cuentaCreada: true,
       user: this.toPublic(user),
-      mensaje: 'Te enviamos un correo para verificar tu cuenta.',
+      mensaje: emailOk
+        ? `Te enviamos un correo a ${user.email} para verificar tu cuenta.`
+        : `Cuenta creada, pero no pudimos enviar el correo a ${user.email}. Usa "Reenviar" en la siguiente pantalla.`,
+      emailEnviadoA: user.email,
     };
   }
 

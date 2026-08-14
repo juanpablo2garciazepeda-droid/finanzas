@@ -1,25 +1,43 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Eye, EyeOff, LockKeyhole, Mail, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  Check,
+  Eye,
+  EyeOff,
+  KeyRound,
+  LockKeyhole,
+  Mail,
+  Send,
+  X,
+} from 'lucide-react'
 import { Boton, Campo, Entrada, Tarjeta, clases } from '@/componentes/ui/Basicos'
 import { useAuth } from '@/estado/auth'
+import { api } from '@/api/cliente'
+import { useAvisos } from '@/estado/avisos'
 
 type Modo = 'login' | 'registro'
+type EstadoRegistro = 'form' | 'verifica-email' | 'ya-registrado'
 
 /**
  * Pantalla de acceso contra el backend.
  *
- *   - Registro: exige email + contraseña (8+ chars, mayúscula, minúscula,
- *     número) + confirmación + nombre + checkbox de términos.
- *   - Login:   email + contraseña + "recordarme" + link a "olvidé".
+ * Tres vistas según lo que pasó al registrar:
+ *   1. form             — el usuario está tipeando credenciales
+ *   2. verifica-email   — la cuenta se creó, le decimos a qué correo
+ *                         mandamos el link, y damos opción de reenviar
+ *   3. ya-registrado    — el correo ya estaba, le decimos con claridad y
+ *                         le damos opciones (login / recuperar contraseña)
  *
- * El medidor de fortaleza es local: nada se manda al backend hasta que
- * cumple la política. La validación final la hace el backend (el cliente
- * puede saltarse la del frontend con devtools).
+ * Antes el mensaje era siempre genérico ("si el correo no estaba…") y
+ * eso confundía: el usuario se quedaba esperando un email que nunca
+ * llegaba cuando en realidad su cuenta ya existía.
  */
 export function Login() {
   const auth = useAuth()
+  const { mostrar } = useAvisos()
   const [modo, setModo] = useState<Modo>('login')
+  const [estado, setEstado] = useState<EstadoRegistro>('form')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmar, setConfirmar] = useState('')
@@ -28,17 +46,28 @@ export function Login() {
   const [recordar, setRecordar] = useState(true)
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [exito, setExito] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [reenviando, setReenviando] = useState(false)
 
   const Fortaleza = useMemo(() => fortalezaPassword(password), [password])
-  const passwordsCoinciden =
-    confirmar.length === 0 || confirmar === password
+  const passwordsCoinciden = confirmar.length === 0 || confirmar === password
+
+  function limpiarYVolverAlForm() {
+    setEstado('form')
+    setError(null)
+  }
+
+  function reiniciarParaLogin() {
+    limpiarYVolverAlForm()
+    setModo('login')
+    setPassword('')
+    setConfirmar('')
+    setTerminos(false)
+  }
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    setExito(null)
     if (modo === 'registro') {
       if (!Fortaleza.cumple) {
         setError(Fortaleza.mensaje)
@@ -69,14 +98,118 @@ export function Login() {
     )
     setCargando(false)
     if (!resultado.ok) {
+      // 409 → el correo ya existe. Cambio a vista dedicada en vez de mostrar
+      // un error genérico en el formulario.
+      if (resultado.status === 409) {
+        setEstado('ya-registrado')
+        return
+      }
       setError(resultado.error ?? 'Algo falló. Inténtalo de nuevo.')
       return
     }
-    if (resultado.mensaje) {
-      setExito(resultado.mensaje)
+    setEstado('verifica-email')
+  }
+
+  async function reenviarVerificacion() {
+    setReenviando(true)
+    const res = await api.post('/auth/reenviar-verificacion', { email: email.trim() })
+    setReenviando(false)
+    if (res.ok) {
+      mostrar('Reenviamos el correo. Revisa spam si no llega en un par de minutos.')
+    } else {
+      mostrar(res.error ?? 'No se pudo reenviar', 'error')
     }
   }
 
+  // ── Vista: "verifica tu correo" tras registro exitoso ──
+  if (estado === 'verifica-email') {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-fondo px-6 py-10">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="flex size-14 items-center justify-center rounded-[16px] bg-acento">
+            <Mail className="size-7 text-sobre-acento" strokeWidth={1.75} aria-hidden />
+          </span>
+          <h1 className="font-display text-[24px] font-semibold text-tinta">
+            Revisa tu correo
+          </h1>
+          <p className="text-[15px] text-suave max-w-sm">
+            Te enviamos un link a{' '}
+            <strong className="text-tinta">{email.trim()}</strong> para terminar de crear tu
+            cuenta. Ábrelo y te llevamos al tablero.
+          </p>
+        </div>
+
+        <Tarjeta className="w-full max-w-sm space-y-3">
+          <p className="text-[13px] text-suave">
+            ¿No llegó? Revisa la carpeta de spam o reenvíalo.
+          </p>
+          <Boton
+            variante="secundario"
+            disabled={reenviando}
+            onClick={reenviarVerificacion}
+            ancho
+          >
+            <Send className="size-4" aria-hidden />
+            {reenviando ? 'Reenviando…' : 'Reenviar correo de verificación'}
+          </Boton>
+          <Boton variante="fantasma" onClick={reiniciarParaLogin} ancho>
+            <ArrowLeft className="size-4" aria-hidden />
+            Volver al inicio de sesión
+          </Boton>
+        </Tarjeta>
+      </div>
+    )
+  }
+
+  // ── Vista: "este correo ya está registrado" ──
+  if (estado === 'ya-registrado') {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-fondo px-6 py-10">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="flex size-14 items-center justify-center rounded-[16px] bg-ambar/15">
+            <KeyRound className="size-7 text-ambar" strokeWidth={1.75} aria-hidden />
+          </span>
+          <h1 className="font-display text-[24px] font-semibold text-tinta">
+            Ya tienes cuenta
+          </h1>
+          <p className="text-[15px] text-suave max-w-sm">
+            El correo <strong className="text-tinta">{email.trim()}</strong> ya está
+            registrado. Inicia sesión o recupera tu contraseña.
+          </p>
+        </div>
+
+        <Tarjeta className="w-full max-w-sm space-y-2">
+          <Boton
+            onClick={() => {
+              setModo('login')
+              setPassword('')
+              limpiarYVolverAlForm()
+            }}
+            ancho
+          >
+            <LockKeyhole className="size-4" aria-hidden />
+            Iniciar sesión
+          </Boton>
+          <Link
+            to="/olvide-password"
+            className={clases(
+              'flex w-full items-center justify-center gap-2 rounded-full border border-borde bg-elevada px-5 py-[11px] text-[15px] text-acento transition-colors hover:bg-hundida',
+            )}
+            onClick={limpiarYVolverAlForm}
+          >
+            <KeyRound className="size-4" aria-hidden />
+            Recuperar contraseña
+          </Link>
+          <Boton variante="fantasma" onClick={limpiarYVolverAlForm} ancho>
+            <ArrowLeft className="size-4" aria-hidden />
+            Usar otro correo
+          </Boton>
+        </Tarjeta>
+      </div>
+    )
+  }
+
+  // ── Vista: formulario (login o registro) ──
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-fondo px-6 py-10">
       <div className="flex flex-col items-center gap-3 text-center">
@@ -218,14 +351,6 @@ export function Login() {
           )}
 
           {error && <p className="text-[13px] text-rojo">{error}</p>}
-          {exito && (
-            <div
-              className="rounded-campo border border-verde/30 bg-verde/10 px-3 py-2 text-[13px] text-verde"
-              role="status"
-            >
-              {exito}
-            </div>
-          )}
 
           <Boton type="submit" disabled={cargando} ancho>
             {cargando
@@ -242,7 +367,6 @@ export function Login() {
         onClick={() => {
           setModo(modo === 'login' ? 'registro' : 'login')
           setError(null)
-          setExito(null)
           setConfirmar('')
           setTerminos(false)
         }}

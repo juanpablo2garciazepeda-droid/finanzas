@@ -41,7 +41,13 @@ export interface AuthEstado {
     email: string,
     password: string,
     displayName: string,
-  ) => Promise<{ ok: boolean; error: string | null; mensaje?: string }>
+  ) => Promise<{
+    ok: boolean
+    status?: number
+    error: string | null
+    mensaje?: string
+    emailEnviadoA?: string
+  }>
   cerrarSesion: () => void
   refrescar: () => Promise<void>
 }
@@ -126,16 +132,24 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
 
   const registrar = useCallback<AuthEstado['registrar']>(
     async (email, password, displayName) => {
-      const res = await api.post<{ user: PublicUserApi; mensaje: string }>(
-        '/auth/register',
-        { email, password, displayName },
-      )
-      if (!res.ok || !res.data)
-        return { ok: false, error: res.error, mensaje: undefined }
+      const res = await api.post<{
+        cuentaCreada: true
+        user: PublicUserApi
+        mensaje: string
+        emailEnviadoA: string
+      }>('/auth/register', { email, password, displayName })
+      if (!res.ok || !res.data) {
+        return { ok: false, status: res.status, error: res.error, mensaje: undefined }
+      }
       // El registro ya NO devuelve token: la cuenta está pendiente de
       // verificar email. Devolvemos ok=true para que la UI muestre
       // "te enviamos un correo" sin loguear todavía.
-      return { ok: true, error: null, mensaje: res.data.mensaje }
+      return {
+        ok: true,
+        error: null,
+        mensaje: res.data.mensaje,
+        emailEnviadoA: res.data.emailEnviadoA,
+      }
     },
     [],
   )
