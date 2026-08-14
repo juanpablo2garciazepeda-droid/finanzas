@@ -30,6 +30,13 @@ create table if not exists public.users (
   email text not null unique,
   password_hash text not null,
   display_name text not null default '',
+  email_verificado boolean not null default false,
+  email_verificado_en timestamptz,
+  token_version integer not null default 0,
+  rol varchar(20) not null default 'usuario'
+    check (rol in ('usuario', 'admin')),
+  debe_cambiar_password boolean not null default false,
+  password_actualizado_en timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -158,6 +165,42 @@ create table if not exists public.suscripciones_push (
   creado_en timestamptz not null default now()
 );
 
+-- ── Auth: verificación de email y reset de password ────────────────────────
+-- Tokens de un solo uso. Se guarda el hash, no el token en claro.
+
+create table if not exists public.tokens_verificacion (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid not null references public.users(id) on delete cascade,
+  token_hash text not null,
+  expira_en timestamptz not null,
+  usado_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+
+create table if not exists public.tokens_reset_password (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid not null references public.users(id) on delete cascade,
+  token_hash text not null,
+  expira_en timestamptz not null,
+  usado_en timestamptz,
+  creado_en timestamptz not null default now()
+);
+
+-- ── Auditoría ──────────────────────────────────────────────────────────────
+-- Eventos sensibles: login_ok/fallo, logout, registro, verificación de email,
+-- cambio de password, reset de password, eliminación de cuenta, logout-all.
+
+create table if not exists public.auditoria (
+  id bigserial primary key,
+  usuario_id uuid references public.users(id) on delete set null,
+  email_intento text,
+  accion varchar(40) not null,
+  detalles jsonb not null default '{}'::jsonb,
+  ip inet,
+  user_agent text,
+  creado_en timestamptz not null default now()
+);
+
 -- ── Índices ─────────────────────────────────────────────────────────────────
 -- Toda consulta filtra por user_id, así que va primero en cada índice.
 
@@ -177,6 +220,14 @@ create index if not exists idx_aportes_usuario_meta
   on public.aportes_meta (user_id, meta_id, fecha desc);
 create index if not exists idx_categorias_usuario_orden
   on public.categorias (user_id, orden);
+create index if not exists idx_tokens_verificacion_usuario
+  on public.tokens_verificacion (usuario_id, creado_en desc);
+create index if not exists idx_tokens_reset_usuario
+  on public.tokens_reset_password (usuario_id, creado_en desc);
+create index if not exists idx_auditoria_usuario_fecha
+  on public.auditoria (usuario_id, creado_en desc);
+create index if not exists idx_auditoria_accion
+  on public.auditoria (accion, creado_en desc);
 
 -- ── Alta de usuario ─────────────────────────────────────────────────────────
 --

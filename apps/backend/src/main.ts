@@ -1,9 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Confiamos en X-Forwarded-For de Traefik para que el throttler y
+  // `request.ip` reflejen la IP real del cliente, no del proxy.
+  app.set('trust proxy', true);
 
   app.enableCors({
     origin: process.env.CORS_ORIGINS?.split(',') ?? [
