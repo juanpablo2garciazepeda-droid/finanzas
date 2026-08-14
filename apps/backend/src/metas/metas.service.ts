@@ -27,6 +27,16 @@ export class MetasService extends AuthCrudService<Meta> {
     });
   }
 
+  /** Override: completa defaults NOT NULL (montoActual, prioridad, completada). */
+  async create(userId: string, input: Partial<Meta>): Promise<Meta> {
+    const payload: Partial<Meta> = { ...input, userId }
+    if (payload.montoActual === undefined) payload.montoActual = '0'
+    if (payload.prioridad === undefined) payload.prioridad = 1
+    if (payload.completada === undefined) payload.completada = false
+    if (payload.icono === undefined) payload.icono = 'Target'
+    return super.create(userId, payload)
+  }
+
   addAporte(
     userId: string,
     metaId: string,

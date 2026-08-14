@@ -27,6 +27,21 @@ export class DeudasService extends AuthCrudService<Deuda> {
     });
   }
 
+  /**
+   * Override del create genérico: si no llega saldoActual, lo iguala a
+   * montoOriginal; la columna es NOT NULL y el frontend a veces omite el campo.
+   */
+  async create(userId: string, input: Partial<Deuda>): Promise<Deuda> {
+    const payload: Partial<Deuda> = { ...input, userId }
+    if (payload.saldoActual === undefined || payload.saldoActual === null) {
+      payload.saldoActual = payload.montoOriginal ?? '0'
+    }
+    if (payload.liquidada === undefined) {
+      payload.liquidada = false
+    }
+    return super.create(userId, payload)
+  }
+
   addPago(
     userId: string,
     deudaId: string,
