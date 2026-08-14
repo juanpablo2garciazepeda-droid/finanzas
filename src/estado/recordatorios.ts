@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { formatearMoneda } from '@/dominio/dinero'
 import { fechaRelativa } from '@/dominio/fechas'
 import { proximosVencimientos } from '@/dominio/deudas'
-import { guardarAjustes } from '@/datos/repositorio'
 import { useFinanzas } from './finanzas'
 
 /**
@@ -25,7 +24,7 @@ export async function pedirPermiso(): Promise<boolean> {
 }
 
 export function useRecordatorios() {
-  const { ajustes, deudas, hoy, cargando } = useFinanzas()
+  const { ajustes, deudas, hoy, cargando, guardarAjustes } = useFinanzas()
 
   useEffect(() => {
     if (cargando || !ajustes.notificacionesActivas) return
@@ -45,5 +44,5 @@ export function useRecordatorios() {
         : `${monto} a ${primero.deuda.acreedor} ${fechaRelativa(hoy, primero.fecha)}, y ${vencimientos.length - 1} pago(s) más esta semana.`
 
     new Notification('Tienes un pago cerca', { body: cuerpo, tag: 'margen-vencimientos' })
-  }, [cargando, ajustes, deudas, hoy])
+  }, [cargando, ajustes, deudas, hoy, guardarAjustes])
 }

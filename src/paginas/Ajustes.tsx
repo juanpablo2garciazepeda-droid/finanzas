@@ -24,7 +24,6 @@ import {
   crearCategoria,
   eliminarCategoria,
   exportarMisDatos,
-  guardarAjustes,
   importarMovimientosCsv,
 } from '@/datos/repositorio'
 import { api } from '@/api/cliente'
@@ -54,8 +53,17 @@ const MONEDAS = [
 ]
 
 export function Ajustes() {
-  const { ajustes, categorias, transacciones, ctx, pagos, periodo, hayMovimientos, refrescar } =
-    useFinanzas()
+  const {
+    ajustes,
+    categorias,
+    transacciones,
+    ctx,
+    pagos,
+    periodo,
+    hayMovimientos,
+    refrescar,
+    guardarAjustes,
+  } = useFinanzas()
   const { mostrar } = useAvisos()
   const { usuario, cerrarSesion, refrescar: refrescarAuth } = useAuth()
   const i18n = useI18n()
@@ -821,7 +829,7 @@ function CampoIngreso({
   locale: string
 }) {
   const { mostrar } = useAvisos()
-  const { refrescar } = useFinanzas()
+  const { refrescar, guardarAjustes } = useFinanzas()
   const [texto, setTexto] = useState(valor > 0 ? String(valor / 100) : '')
   const [guardando, setGuardando] = useState(false)
 
@@ -888,6 +896,7 @@ function CampoSaldo({
   fecha: string
 }) {
   const { mostrar } = useAvisos()
+  const { guardarAjustes } = useFinanzas()
   const [monto, setMonto] = useState(valor > 0 ? String(valor / 100) : '')
   const [fechaSaldo, setFechaSaldo] = useState(fecha)
   const [guardando, setGuardando] = useState(false)

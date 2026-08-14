@@ -389,8 +389,21 @@ function ajustesPorDefecto(): Ajustes {
 
 // ─── Ajustes ───────────────────────────────────────────────────────────────
 
-export async function guardarAjustes(cambios: Partial<Ajustes>): Promise<void> {
-  await api.patch('/ajustes', ajusteHaciaApi(cambios))
+/**
+ * Devuelve los ajustes nuevos del backend para que el caller actualice
+ * el estado local sin tener que hacer un refetch entero. Esto es
+ * importante para cosas como `tema` y `acento` que se aplican al DOM
+ * en un `useEffect`: si la UI no se actualiza, el `useEffect` no
+ * corre y el cambio solo se ve al recargar.
+ */
+export async function guardarAjustes(
+  cambios: Partial<Ajustes>,
+): Promise<Ajustes> {
+  const res = await api.patch<ApiAjustes>('/ajustes', ajusteHaciaApi(cambios))
+  if (!res.ok || !res.data) {
+    throw new Error(res.error ?? 'No se pudieron guardar los ajustes')
+  }
+  return ajusteDesdeApi(res.data)
 }
 
 // ─── Categorías ────────────────────────────────────────────────────────────

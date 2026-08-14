@@ -11,7 +11,7 @@ import type {
 } from '@/dominio/tipos'
 import type { ContextoFinanciero } from '@/dominio/alertas'
 import { hoyISO, periodoActual } from '@/dominio/fechas'
-import { cargarTodo } from '@/datos/repositorio'
+import { cargarTodo, guardarAjustes as guardarAjustesApi } from '@/datos/repositorio'
 
 export interface EstadoFinanzas {
   cargando: boolean
@@ -41,6 +41,13 @@ export interface EstadoFinanzas {
   hayDatos: boolean
   /** Vuelve a traer todo del backend. Útil tras una mutación. */
   refrescar: () => Promise<void>
+  /**
+   * Guarda cambios en los ajustes y actualiza el estado local de inmediato
+   * (sin refetch). Esto es clave para `tema` y `acento`: el `useEffect`
+   * que pinta el tema necesita ver el nuevo valor en el siguiente render,
+   * si no, el cambio solo se aplica al recargar la página.
+   */
+  guardarAjustes: (cambios: Partial<Ajustes>) => Promise<void>
 }
 
 const Contexto = createContext<EstadoFinanzas | null>(null)
@@ -56,6 +63,11 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
     setError(null)
     const r = await cargarTodo()
     setDatos(r)
+  }, [])
+
+  const guardarAjustes = useCallback(async (cambios: Partial<Ajustes>) => {
+    const nuevos = await guardarAjustesApi(cambios)
+    setDatos((prev) => (prev ? { ...prev, ajustes: nuevos } : prev))
   }, [])
 
   useEffect(() => {
@@ -120,8 +132,9 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         ajustes.ingresoMensual > 0 ||
         ajustes.saldoInicial > 0,
       refrescar,
+      guardarAjustes,
     }
-  }, [datos, listo, error, periodo, hoy, refrescar])
+  }, [datos, listo, error, periodo, hoy, refrescar, guardarAjustes])
 
   return <Contexto value={valor}>{children}</Contexto>
 }
