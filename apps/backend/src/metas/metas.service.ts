@@ -32,15 +32,37 @@ export class MetasService extends AuthCrudService<Meta> {
     metaId: string,
     input: Partial<AporteMeta>,
   ): Promise<AporteMeta> {
-    return this.aportesRepo.save(
-      this.aportesRepo.create({ ...input, userId, metaId }),
-    );
+    return this.aportesRepo
+      .save(this.aportesRepo.create({ ...input, userId, metaId }))
+      .then(async (aporte) => {
+        await this.recalcularMeta(userId, metaId)
+        return aporte
+      })
   }
 
   async removeAporte(userId: string, aporteId: string): Promise<void> {
-    const result = await this.aportesRepo.delete({ id: aporteId, userId });
-    if (!result.affected) {
-      throw new Error('not found');
-    }
+    const aporte = await this.aportesRepo.findOne({ where: { id: aporteId, userId } })
+    if (!aporte) throw new Error('not found')
+    await this.aportesRepo.delete({ id: aporteId, userId })
+    await this.recalcularMeta(userId, aporte.metaId)
+  }
+
+  /** Suma los aportes y actualiza monto_actual + completada en la meta. */
+  private async recalcularMeta(userId: string, metaId: string): Promise<void> {
+    const meta = await this.metasRepo.findOne({ where: { id: metaId, userId } })
+    if (!meta) return
+    const aportes = await this.aportesRepo.find({ where: { userId, metaId } })
+    const total = aportes.reduce(
+      (acc, a) => acc + BigInt(a.monto || '0'),
+      BigInt(0),
+    )
+    const objetivo = BigInt(meta.montoObjetivo || '0')
+    await this.metasRepo.update(
+      { id: metaId, userId },
+      {
+        montoActual: total.toString(),
+        completada: objetivo > BigInt(0) && total >= objetivo,
+      },
+    )
   }
 }

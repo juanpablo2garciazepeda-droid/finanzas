@@ -17,23 +17,32 @@ export class Meta {
   @Column({ name: 'user_id', type: 'uuid' })
   userId!: string;
 
-  @Column({ type: 'text' })
+  @Column({ name: 'nombre', type: 'text' })
   nombre!: string;
 
   @Column({ name: 'monto_objetivo', type: 'bigint' })
   montoObjetivo!: string;
 
-  @Column({ name: 'fecha_limite', type: 'text', default: '' })
+  /** Derivado de los aportes, materializado en la fila. */
+  @Column({ name: 'monto_actual', type: 'bigint', default: 0 })
+  montoActual!: string;
+
+  @Column({ name: 'fecha_limite', type: 'text' })
   fechaLimite!: string;
 
-  @Column({ type: 'integer', default: 0 })
+  /** 1 es la más importante. */
+  @Column({ name: 'prioridad', type: 'integer', default: 1 })
   prioridad!: number;
 
-  @Column({ type: 'boolean', default: false })
-  completada!: boolean;
+  /** Lo que el usuario planea apartar cada mes. */
+  @Column({ name: 'aporte_mensual', type: 'bigint', default: 0 })
+  aporteMensual!: string;
 
-  @Column({ type: 'text', default: '' })
-  nota!: string;
+  @Column({ name: 'icono', type: 'text', default: 'Target' })
+  icono!: string;
+
+  @Column({ name: 'completada', type: 'boolean', default: false })
+  completada!: boolean;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creadoEn!: Date;
