@@ -128,13 +128,18 @@ export function ProveedorI18n({ children }: { children: ReactNode }) {
     [usuario],
   )
 
-  // Sincronizar localStorage cuando el usuario cambia (login de alguien con
-  // idioma distinto).
+  // Sincronizar localStorage Y el estado local cuando el usuario cambia
+  // (login de alguien con idioma distinto, o refresh del perfil).
   useEffect(() => {
-    if (usuario?.idioma) {
-      localStorage.setItem(CLAVE_LOCAL, usuario.idioma)
+    if (usuario?.idioma && usuario.idioma !== idiomaLocal) {
+      setIdiomaLocal(usuario.idioma as Idioma)
+      try {
+        localStorage.setItem(CLAVE_LOCAL, usuario.idioma)
+      } catch {
+        // sin localStorage no pasa nada grave
+      }
     }
-  }, [usuario?.idioma])
+  }, [usuario?.idioma, idiomaLocal])
 
   const t = useCallback(
     (clave: string): string => {

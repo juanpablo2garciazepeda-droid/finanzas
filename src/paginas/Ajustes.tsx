@@ -87,8 +87,8 @@ export function Ajustes() {
         <Tarjeta className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-tinta">{usuario?.email}</p>
-              <p className="mt-0.5 text-[13px] text-tenue">{usuario?.displayName || 'Sin nombre'}</p>
+              <p className="truncate text-sm text-tinta">{usuario?.email}</p>
+              <p className="mt-0.5 truncate text-[13px] text-tenue">{usuario?.displayName || 'Sin nombre'}</p>
               {usuario && !usuario.emailVerificado && (
                 <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-ambar/10 px-2 py-0.5 text-[12px] text-ambar">
                   <X className="size-3" aria-hidden />

@@ -8,12 +8,12 @@ import {
   LayoutDashboard,
   Plus,
   Receipt,
-  Settings,
   Target,
   Wallet,
 } from 'lucide-react'
 import { nombrePeriodo, periodoActual, sumarMeses } from '@/dominio/fechas'
 import { useFinanzas } from '@/estado/finanzas'
+import { useAuth } from '@/estado/auth'
 import { clases } from './ui/Basicos'
 import { FormularioMovimiento } from './FormularioMovimiento'
 
@@ -59,6 +59,7 @@ export function Disposicion({ children }: { children: ReactNode }) {
 }
 
 function BarraLateral() {
+  const { usuario } = useAuth()
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-borde bg-superficie px-3 py-6 lg:flex">
       <div className="px-3 pb-8">
@@ -91,7 +92,11 @@ function BarraLateral() {
           )
         }
       >
-        <Settings className="size-[18px]" strokeWidth={1.75} aria-hidden />
+        {usuario ? (
+          <AvatarInicial nombre={usuario.displayName || usuario.email} tamaño={7} />
+        ) : (
+          <span className="flex size-7 items-center justify-center rounded-full bg-elevada" />
+        )}
         Ajustes
       </NavLink>
     </aside>
@@ -224,6 +229,7 @@ function MarcaApp({ compacta }: { compacta?: boolean }) {
 
 function Encabezado() {
   const { periodo, irAPeriodo, esPeriodoActual } = useFinanzas()
+  const { usuario } = useAuth()
 
   return (
     <header className="sticky top-0 z-20 cristal border-b border-borde">
@@ -261,19 +267,44 @@ function Encabezado() {
           </button>
         </div>
 
+        {/* Avatar: clic abre Ajustes. Reemplaza la ruedita para que el
+            destino "configuración" sea más natural (foto → perfil). */}
         <NavLink
           to="/ajustes"
           aria-label="Ajustes"
-          className={({ isActive }) =>
-            clases(
-              'shrink-0 rounded-full bg-elevada p-2.5 transition-colors lg:hidden',
-              isActive ? 'text-acento' : 'text-suave hover:text-tinta',
-            )
-          }
+          className="shrink-0 lg:hidden"
         >
-          <Settings className="size-4" aria-hidden />
+          {usuario ? (
+            <AvatarInicial nombre={usuario.displayName || usuario.email} />
+          ) : (
+            <span className="flex size-9 items-center justify-center rounded-full bg-elevada" />
+          )}
         </NavLink>
       </div>
     </header>
+  )
+}
+
+/**
+ * Avatar con la inicial del nombre. Si no hay displayName, usa la inicial
+ * del email. El color de fondo se deriva del nombre (hash simple) para
+ * que cada cuenta tenga un color consistente.
+ */
+function AvatarInicial({ nombre, tamaño = 9 }: { nombre: string; tamaño?: 7 | 9 }) {
+  const inicial = (nombre.trim()[0] ?? '?').toUpperCase()
+  const hash = [...nombre].reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  const paleta = ['bg-acento', 'bg-verde', 'bg-ambar', 'bg-rosa', 'bg-morado']
+  const color = paleta[hash % paleta.length]
+  return (
+    <span
+      className={clases(
+        'flex shrink-0 items-center justify-center rounded-full font-semibold text-sobre-acento shadow-tarjeta',
+        tamaño === 9 ? 'size-9 text-[15px]' : 'size-7 text-[13px]',
+        color,
+      )}
+      aria-hidden
+    >
+      {inicial}
+    </span>
   )
 }
