@@ -1,3 +1,11 @@
+# Finanzas GZ — frontend (Dokploy Compose)
+#
+# Configuración esperada del servicio en Dokploy:
+#   Provider / Source Type : GitHub (o Git), NO "Raw".
+#   Branch                 : main
+#   Compose Path           : docker-compose.dokploy.yml
+#
+# Con "Raw" no se clona el repo y `build.context` no existe en el servidor.
 services:
   web:
     build:

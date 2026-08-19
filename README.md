@@ -250,3 +250,43 @@ consultas no mide nada.
   enteros de 64 bits.
 - **Las migraciones son archivos sueltos en `sql/`, aditivos y repetibles.** Se aplican en
   orden por fecha y usan `IF NOT EXISTS`; correr una dos veces no rompe nada.
+
+## Despliegue (Dokploy)
+
+Son **dos servicios Compose** separados en Dokploy, ambos apuntando al mismo repo de GitHub.
+Lo importante es que el *Source Type* sea **GitHub/Git y nunca "Raw"**: en modo Raw, Dokploy
+solo escribe un `docker-compose.yml` suelto en `/etc/dokploy/compose/<app>/code/` y no clona
+nada, así que el `build.context` apunta a carpetas que no existen y el despliegue muere con
+`lstat /etc/dokploy/compose/finanzas-gz-backend/code/apps: no such file or directory`.
+
+| Servicio | Compose Path | Dominio |
+|---|---|---|
+| `finanzas-gz` (frontend) | `docker-compose.dokploy.yml` | `finanzasgz.com.mx` |
+| `finanzas-gz-backend` (API) | `apps/backend/docker-compose.dokploy.yml` | `api.finanzasgz.com.mx` |
+
+En ambos: Provider `GitHub`, repo `juanpablo2garciazepeda-droid/finanzas`, branch `main`.
+El `context: .` de cada archivo se resuelve contra su propia carpeta, no contra la raíz.
+
+### Variables que el backend exige
+
+Van en la pestaña **Environment** del servicio `finanzas-gz-backend`. Las cuatro primeras usan
+la sintaxis `${VAR:?}`, o sea que si faltan el despliegue falla antes de construir la imagen:
+
+```
+DATABASE_HOST=...
+DATABASE_USER=...
+DATABASE_PASSWORD=...
+JWT_SECRET=...            # openssl rand -hex 48
+```
+
+Opcionales con valor por defecto: `DATABASE_PORT` (5432), `DATABASE_NAME` (finanzas),
+`JWT_EXPIRES_IN` (30d), `CORS_ORIGINS` y `APP_URL` (el dominio oficial).
+
+Para que los correos de verificación salgan de verdad hay que poner `EMAIL_MODE=smtp` junto
+con `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM`. El valor por defecto
+es `console`, que solo los imprime en el log del contenedor.
+
+### La red de Traefik
+
+Los dos archivos declaran `dokploy-network` como `external: true`. Ya existe si Dokploy está
+instalado; si no, `docker network create dokploy-network` en el VPS antes del primer deploy.

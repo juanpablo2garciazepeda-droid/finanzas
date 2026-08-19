@@ -1,3 +1,21 @@
+# Finanzas GZ — API (Dokploy Compose)
+#
+# IMPORTANTE — cómo debe quedar configurado el servicio en Dokploy:
+#   Provider / Source Type : GitHub (o Git), NO "Raw".
+#   Repositorio            : juanpablo2garciazepeda-droid/finanzas
+#   Branch                 : main
+#   Compose Path           : apps/backend/docker-compose.dokploy.yml
+#
+# Con "Raw" Dokploy solo escribe un docker-compose.yml en
+# /etc/dokploy/compose/<app>/code/ y NO clona el repo, así que cualquier
+# `build.context` que apunte al código revienta con:
+#   lstat /etc/dokploy/compose/finanzas-gz-backend/code/apps: no such file or directory
+#
+# El `context: .` de abajo se resuelve contra la carpeta de ESTE archivo
+# (apps/backend), no contra la raíz del repo. Si mueves el archivo, ajústalo.
+#
+# Las variables con `:?` son obligatorias: si faltan en la pestaña
+# Environment de Dokploy el despliegue falla antes de construir.
 services:
   api:
     build:
