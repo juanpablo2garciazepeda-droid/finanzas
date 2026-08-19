@@ -48,9 +48,12 @@ export function OlvidePassword() {
                 Revisa tu correo
               </h1>
               <p className="mt-2 text-[15px] leading-relaxed text-suave">
+                {/* Los minutos los manda el backend: la verdad vive en
+                    MINUTOS_RESET de apps/backend/src/auth/caducidad.ts. Si
+                    cambia allá y este número se queda, la pantalla miente. */}
                 Si <strong className="font-medium text-tinta">{email.trim()}</strong> tiene
                 una cuenta, ahí está el enlace para elegir una contraseña nueva. Vence en
-                30 minutos y solo sirve una vez.
+                10 minutos y solo sirve una vez.
               </p>
               <p className="mt-3 text-[13px] text-tenue">
                 ¿No aparece? Mira en spam antes de volver a pedirlo.

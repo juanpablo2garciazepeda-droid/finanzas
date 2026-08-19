@@ -9,6 +9,10 @@ import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { EmailService } from './email.service';
+import {
+  EXPIRACION_RESET_MS,
+  EXPIRACION_VERIFICACION_MS,
+} from './caducidad';
 import { RecurrentesService } from '../recurrentes/recurrentes.service';
 import { DigestService } from '../digest/digest.service';
 import { TokenVerificacion } from './token-verificacion.entity';
@@ -51,13 +55,14 @@ export interface PublicUser {
 }
 
 /**
- * 30 minutos, igual para el enlace y para el código de 6 dígitos que van en el
+ * El mismo plazo para el enlace y para el código de 6 dígitos que van en el
  * mismo correo: son dos formas de canjear la misma fila, y dos vencimientos
  * distintos solo servirían para que la pantalla tuviera que explicar cuál de
  * los dos caducó. Quien tarde más tiene el botón de reenviar a un clic.
+ *
+ * Los valores viven en `caducidad.ts` porque las plantillas los necesitan para
+ * escribirlos en el cuerpo del correo. Ver ahí por qué son diez minutos.
  */
-const EXPIRACION_VERIFICACION_MS = 1000 * 60 * 30;
-const EXPIRACION_RESET_MS = 1000 * 60 * 30;
 /** Intentos fallidos antes de quemar un código. 6 dígitos son un millón de
  *  combinaciones; sin tope, un bot las recorre. */
 const MAX_INTENTOS_CODIGO = 6;
@@ -197,6 +202,12 @@ export class AuthService {
 
     await this.codigosRegistro.update({ id: fila.id }, { usadoEn: new Date() });
 
+    // 30 minutos y no los 10 de `caducidad.ts`, a propósito. Este pase no
+    // viaja por correo: se queda en el navegador de quien acaba de demostrar
+    // que controla el buzón, así que acortarlo no compra seguridad. Y sí
+    // costaría altas — cubre los pasos de contraseña y foto, y arriba acabamos
+    // de marcar el código como usado, o sea que vencer aquí obliga a repetir
+    // el flujo entero desde el correo.
     const tokenRegistro = this.jwt.sign(
       { email: lowerEmail, uso: 'registro' },
       { expiresIn: '30m' },

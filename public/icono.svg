@@ -1,6 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#0071E3"/>
-  <path d="M12 40 A20 20 0 0 1 52 40" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"/>
-  <path d="M12 40 A20 20 0 0 1 26 21.2" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="32" cy="44" r="3.5" fill="#FFFFFF"/>
+<!--
+  El mismo dibujo que src/componentes/Marca.tsx, trazo por trazo. Antes no lo
+  era: este archivo llevaba rx="14" y arcos de radio 20, y el componente rx 14.5
+  y radio 18, así que la pestaña y el encabezado enseñaban dos logos parecidos
+  pero distintos.
+
+  El color va fijo en grafito (#3A3A3C, el valor que toma la variable
+  color-acento con el acento por defecto) y no en var(), como sí hace el
+  componente: un SVG cargado como favicon no hereda las variables del
+  documento, y el navegador tiene que pintarlo antes de que exista la app.
+
+  Cuidado al editar este comentario: XML prohíbe el doble guion dentro de un
+  comentario. Escribir el nombre de la variable CSS con sus dos guiones de
+  prefijo rompe el archivo entero y el icono deja de cargar.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Finanzas GZ">
+  <rect width="64" height="64" rx="14.5" fill="#3A3A3C"/>
+  <path d="M14 41 A18 18 0 0 1 50 41" fill="none" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="6" stroke-linecap="round"/>
+  <path d="M14 41 A18 18 0 0 1 27.4 23.6" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="32" cy="41" r="3.6" fill="#FFFFFF"/>
 </svg>

@@ -27,7 +27,24 @@
  *   estándar que no lo toquen.
  */
 
-const AZUL = '#0071E3';
+/**
+ * Grafito, el acento por defecto de la app. Son literalmente los valores de
+ * `--color-acento` y `--color-acento-suave` del bloque `[data-acento='grafito']`
+ * de `src/index.css`: el correo y la pantalla tienen que ser la misma marca, y
+ * antes el correo iba en azul mientras la app llevaba meses en grafito.
+ */
+import { MINUTOS_RESET, MINUTOS_VERIFICACION } from './caducidad';
+
+const MARCA = '#3A3A3C';
+const MARCA_SUAVE = '#ECECEE';
+
+/**
+ * El único azul que queda, y solo para la URL que se imprime en crudo como
+ * respaldo de los botones. Una dirección desnuda en gris pierde lo único que
+ * la delata como enlace; los clientes de correo no subrayan por su cuenta.
+ */
+const ENLACE = '#0071E3';
+
 const TINTA = '#1D1D1F';
 const SUAVE = '#6E6E73';
 const TENUE = '#86868B';
@@ -96,7 +113,7 @@ function envoltura({
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td width="40" height="40" align="center" valign="middle"
-                    style="width:40px;height:40px;background-color:${AZUL};border-radius:10px;
+                    style="width:40px;height:40px;background-color:${MARCA};border-radius:10px;
                            font-family:${TIPOGRAFIA};font-size:15px;font-weight:700;
                            color:#FFFFFF;letter-spacing:-0.02em;">GZ</td>
                 <td style="padding-left:10px;font-family:${TIPOGRAFIA};font-size:17px;
@@ -153,7 +170,7 @@ function nota(texto: string): string {
 function boton(url: string, etiqueta: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 0 0;">
   <tr>
-    <td align="center" style="background-color:${AZUL};border-radius:980px;">
+    <td align="center" style="background-color:${MARCA};border-radius:980px;">
       <a href="${url}" style="display:inline-block;padding:13px 28px;font-family:${TIPOGRAFIA};
          font-size:15px;font-weight:500;color:#FFFFFF;text-decoration:none;">${etiqueta}</a>
     </td>
@@ -182,7 +199,7 @@ function enlaceCrudo(url: string): string {
   return `<p style="margin:16px 0 0 0;font-family:${TIPOGRAFIA};font-size:12px;
     line-height:18px;color:${TENUE};word-break:break-all;">
     ¿No funciona el botón? Copia esta dirección en tu navegador:<br>
-    <a href="${url}" style="color:${AZUL};text-decoration:none;">${url}</a>
+    <a href="${url}" style="color:${ENLACE};text-decoration:none;">${url}</a>
   </p>`;
 }
 
@@ -207,12 +224,12 @@ export function correoVerificacion(
     'Tecléalo en la pantalla donde te quedaste, o abre este enlace:',
     enlace,
     '',
-    'El código vence en 30 minutos y solo sirve una vez.',
+    `El código vence en ${MINUTOS_VERIFICACION} minutos y solo sirve una vez.`,
     'Si no creaste una cuenta en Finanzas GZ, ignora este mensaje.',
   ].join('\n');
 
   const html = envoltura({
-    preheader: `Tu código es ${codigo}. Vence en 30 minutos.`,
+    preheader: `Tu código es ${codigo}. Vence en ${MINUTOS_VERIFICACION} minutos.`,
     contenido: [
       titulo('Confirma tu correo'),
       parrafo(
@@ -226,7 +243,7 @@ export function correoVerificacion(
       boton(enlace, 'Confirmar mi correo'),
       enlaceCrudo(enlace),
       nota(
-        'El código vence en 30 minutos y solo sirve una vez. Si no creaste una cuenta en Finanzas GZ, no tienes que hacer nada: sin confirmar, la cuenta no se activa.',
+        `El código vence en ${MINUTOS_VERIFICACION} minutos y solo sirve una vez. Si no creaste una cuenta en Finanzas GZ, no tienes que hacer nada: sin confirmar, la cuenta no se activa.`,
       ),
     ].join('\n'),
   });
@@ -250,18 +267,18 @@ export function correoCodigoRegistro(codigo: string): CorreoArmado {
     '',
     codigo,
     '',
-    'Tecléalo en la pestaña donde te quedaste. Vence en 30 minutos.',
+    `Tecléalo en la pestaña donde te quedaste. Vence en ${MINUTOS_VERIFICACION} minutos.`,
     'Si no fuiste tú, ignora este mensaje: sin el código no se crea ninguna cuenta.',
   ].join('\n');
 
   const html = envoltura({
-    preheader: `Tu código es ${codigo}. Vence en 30 minutos.`,
+    preheader: `Tu código es ${codigo}. Vence en ${MINUTOS_VERIFICACION} minutos.`,
     contenido: [
       titulo('Confirma tu correo'),
       parrafo('Teclea este código en la pestaña donde te quedaste para seguir creando tu cuenta:'),
       bloqueCodigo(codigo),
       nota(
-        'Vence en 30 minutos y solo sirve una vez. Si no fuiste tú quien lo pidió, no tienes que hacer nada: sin el código no se crea ninguna cuenta con tu correo.',
+        `Vence en ${MINUTOS_VERIFICACION} minutos y solo sirve una vez. Si no fuiste tú quien lo pidió, no tienes que hacer nada: sin el código no se crea ninguna cuenta con tu correo.`,
       ),
     ].join('\n'),
     piePersonalizado:
@@ -290,8 +307,8 @@ export function correoBienvenida(nombre: string, enlaceApp: string): CorreoArmad
   const paso = (n: number, t: string, d: string) =>
     `<tr>
       <td width="28" valign="top" style="padding:0 12px 14px 0;">
-        <div style="width:24px;height:24px;background-color:#E8F2FD;border-radius:999px;
-                    font-family:${TIPOGRAFIA};font-size:13px;font-weight:600;color:${AZUL};
+        <div style="width:24px;height:24px;background-color:${MARCA_SUAVE};border-radius:999px;
+                    font-family:${TIPOGRAFIA};font-size:13px;font-weight:600;color:${MARCA};
                     text-align:center;line-height:24px;">${n}</div>
       </td>
       <td valign="top" style="padding:0 0 14px 0;font-family:${TIPOGRAFIA};">
@@ -330,14 +347,14 @@ export function correoReset(nombre: string, enlace: string): CorreoArmado {
     saludo(nombre),
     '',
     'Recibimos una solicitud para restablecer la contraseña de tu cuenta.',
-    'Si fuiste tú, entra a este enlace (vence en 30 minutos):',
+    `Si fuiste tú, entra a este enlace (vence en ${MINUTOS_RESET} minutos):`,
     enlace,
     '',
     'Si no fuiste tú, ignora este mensaje: tu contraseña sigue igual.',
   ].join('\n');
 
   const html = envoltura({
-    preheader: 'Enlace para elegir una contraseña nueva. Vence en 30 minutos.',
+    preheader: `Enlace para elegir una contraseña nueva. Vence en ${MINUTOS_RESET} minutos.`,
     contenido: [
       titulo('Restablece tu contraseña'),
       parrafo(
@@ -346,7 +363,7 @@ export function correoReset(nombre: string, enlace: string): CorreoArmado {
       boton(enlace, 'Elegir contraseña nueva'),
       enlaceCrudo(enlace),
       nota(
-        'El enlace vence en 30 minutos. <strong style="color:' +
+        `El enlace vence en ${MINUTOS_RESET} minutos. <strong style="color:` +
           SUAVE +
           '">Si no fuiste tú, no tienes que hacer nada</strong>: tu contraseña sigue igual y nadie puede cambiarla sin este correo. Al usarlo, se cerrará la sesión en todos tus dispositivos.',
       ),
@@ -368,7 +385,7 @@ export function correoCambioCorreo(
     saludo(nombre),
     '',
     `Recibimos una solicitud para cambiar el correo de tu cuenta a ${nuevoEmail}.`,
-    'Si fuiste tú, confirma aquí (vence en 30 minutos):',
+    `Si fuiste tú, confirma aquí (vence en ${MINUTOS_VERIFICACION} minutos):`,
     enlace,
     '',
     'Si no fuiste tú, ignora este mensaje: tu correo no cambia.',
