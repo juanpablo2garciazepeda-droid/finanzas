@@ -3,6 +3,40 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Ajuste } from './ajuste.entity';
 
+/**
+ * Los campos que `PATCH /ajustes` puede tocar. Lista explícita y no un
+ * `Object.entries(input)` genérico por dos razones: `userId` (la PK) y
+ * `actualizadoEn` quedan fuera por construcción y no por una comparación de
+ * cadenas que se olvida al refactorizar, y el `satisfies` hace que
+ * TypeScript falle aquí mismo si alguien renombra una columna de `Ajuste`.
+ */
+const CAMPOS_EDITABLES = [
+  'moneda',
+  'locale',
+  'ingresoMensual',
+  'cicloPago',
+  'saldoInicial',
+  'saldoInicialFecha',
+  'tema',
+  'acento',
+  'diasAvisoVencimiento',
+  'umbralPrecaucion',
+  'notificacionesActivas',
+  'ultimaRevisionVencimientos',
+] as const satisfies readonly (keyof Ajuste)[];
+
+/**
+ * Escribir un campo cuya clave sale de un bucle. El genérico ata la clave
+ * con el tipo de su valor, así que la asignación a la entidad sí queda
+ * verificada; hacerlo en línea obligaría a un
+ * `(actual as Record<string, unknown>)[clave]`, que TypeScript rechaza —
+ * `Ajuste` es una clase sin index signature — y que además apagaría la
+ * comprobación de tipos de toda la asignación.
+ */
+function asignar<K extends keyof Ajuste>(destino: Ajuste, clave: K, valor: Ajuste[K]): void {
+  destino[clave] = valor;
+}
+
 @Injectable()
 export class AjustesService {
   constructor(
@@ -37,9 +71,10 @@ export class AjustesService {
     // uno solo. Resultado: "cambié tema y se borró el acento" (y simétrico).
     const actual = await this.repo.findOne({ where: { userId } });
     if (!actual) throw new NotFoundException('ajuste not found');
-    for (const [clave, valor] of Object.entries(input)) {
-      if (valor !== undefined && clave !== 'userId') {
-        (actual as Record<string, unknown>)[clave] = valor;
+    for (const clave of CAMPOS_EDITABLES) {
+      const valor = input[clave];
+      if (valor !== undefined) {
+        asignar(actual, clave, valor);
       }
     }
     return this.repo.save(actual);
