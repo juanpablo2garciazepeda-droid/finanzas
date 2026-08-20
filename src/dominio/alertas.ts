@@ -281,22 +281,45 @@ export function evaluarGasto(
   }
 
   // 3. El margen libre: lo que queda después de deudas y metas.
+  //
+  // Hay dos magnitudes que pueden contestar "¿cuánto me queda?": el flujo del
+  // ciclo (lo que entró menos lo que salió en esta ventana) y el colchón (lo
+  // que de verdad tengo en la cuenta, ya con saldo declarado). Si la persona
+  // declaró su saldo y el colchón es más chico que el flujo, el colchón es el
+  // binding: caso típico al inicio de la quincena, con el sueldo aún sin caer
+  // y la cuenta flaca. Decir "te quedan $6,300 libres" cuando tienes $21 en
+  // la cuenta es una mentira que se arregla con esta resta.
   const margenDespues = margen.margenLibre - monto
+  const declaroSaldo = margen.colchonTotal !== null && margen.dineroDisponible !== null
+  const flujoEsBinding = !declaroSaldo || margen.colchonTotal! >= margen.margenLibre
+  const margenBinding = flujoEsBinding ? margen.margenLibre : margen.colchonTotal!
+  const margenRealDespues = margenBinding - monto
   const ventana = esteCiclo(margen.ciclo.tipo)
   const restoDel = margen.ciclo.tipo === 'mensual' ? 'del mes' : `de ${ventana.replace('esta ', 'la ')}`
+
   if (margen.ingresos === 0) {
     razones.push({
       clave: 'sin-ingresos',
       nivel: 'ambar',
       texto: `Aún no registras ingresos, así que no puedo medir tu margen ${ventana}.`,
     })
-  } else if (margenDespues < 0) {
-    const faltante = -margenDespues
-    // Gastar más de lo que entró teniendo con qué cubrirlo no es lo mismo que
-    // no tener con qué. Lo primero es una decisión; lo segundo, un problema.
-    const loCubreElAhorro = margen.colchonTotal !== null && margen.colchonTotal >= faltante
-    const comeDeudas = margenDespues + margen.compromisoMeta < 0
-    if (loCubreElAhorro) {
+  } else if (margenRealDespues < 0) {
+    const faltante = -margenRealDespues
+    // El binding manda para decidir si el faltante lo cubre el colchón o no.
+    const loCubreElAhorro = !flujoEsBinding || (margen.colchonTotal !== null && margen.colchonTotal >= faltante)
+    const comeDeudas = margenRealDespues + margen.compromisoMeta < 0
+    if (loCubreElAhorro && !flujoEsBinding) {
+      // El flujo dice que alcanza, pero el binding (tu cuenta) no. Decirlo
+      // claro en lugar de decir "saldrían de tu ahorro" — el binding ya ES
+      // tu cuenta, no una proyección.
+      razones.push({
+        clave: 'margen',
+        nivel: 'rojo',
+        texto: simulacion
+          ? `Te faltan ${dinero(faltante, f)} en tu cuenta para este gasto. Tu quincena aún no cae.`
+          : `Te faltan ${dinero(faltante, f)} en tu cuenta ${restoDel.replace('de la ', 'de la ')}.`,
+      })
+    } else if (loCubreElAhorro) {
       razones.push({
         clave: 'margen',
         nivel: 'ambar',
@@ -309,11 +332,11 @@ export function evaluarGasto(
         clave: 'margen',
         nivel: 'rojo',
         texto: simulacion
-          ? `Te quedarías ${dinero(-margenDespues, f)} corto para los pagos de deuda que vienen.`
-          : `Te faltan ${dinero(-margenDespues, f)} para cubrir los pagos de deuda que vienen.`,
+          ? `Te quedarías ${dinero(-margenRealDespues, f)} corto para los pagos de deuda que vienen.`
+          : `Te faltan ${dinero(-margenRealDespues, f)} para cubrir los pagos de deuda que vienen.`,
       })
     } else if (margen.compromisoMeta > 0) {
-      const afectado = dinero(Math.min(-margenDespues, margen.compromisoMeta), f)
+      const afectado = dinero(Math.min(-margenRealDespues, margen.compromisoMeta), f)
       razones.push({
         clave: 'margen',
         nivel: 'rojo',
@@ -326,22 +349,35 @@ export function evaluarGasto(
         clave: 'margen',
         nivel: 'rojo',
         texto: simulacion
-          ? `Este gasto te deja ${dinero(-margenDespues, f)} en números rojos.`
-          : `Vas ${dinero(-margenDespues, f)} en números rojos ${ventana}.`,
+          ? `Este gasto te deja ${dinero(-margenRealDespues, f)} en números rojos.`
+          : `Vas ${dinero(-margenRealDespues, f)} en números rojos ${ventana}.`,
       })
     }
   } else if (margen.margenLibre > 0 && monto > margen.margenLibre * umbral) {
     razones.push({
       clave: 'margen',
       nivel: 'ambar',
-      texto: `Te quedarían ${dinero(margenDespues, f)} libres para el resto ${restoDel}.`,
+      texto: `Te quedarían ${dinero(margenRealDespues, f)} libres para el resto ${restoDel}.`,
     })
   } else if (simulacion) {
-    razones.push({
-      clave: 'margen',
-      nivel: 'verde',
-      texto: `Te quedan ${dinero(margenDespues, f)} libres después de este gasto.`,
-    })
+    // Caso típico del usuario: declaró $21 de saldo, la quincena aún no cae,
+    // el flujo del ciclo dice que tiene $6,300 pero la cuenta solo trae $21.
+    // El flujo era una proyección; lo que cuenta HOY es el binding.
+    if (!flujoEsBinding) {
+      const enCuenta = margen.dineroDisponible!
+      const enCuentaDespues = enCuenta - monto
+      razones.push({
+        clave: 'margen',
+        nivel: 'verde',
+        texto: `Tu cuenta queda en ${dinero(enCuentaDespues, f)} tras este gasto. Hoy partes de ${dinero(enCuenta, f)}: este margen sale de lo que ya tienes, no de lo que va a entrar.`,
+      })
+    } else {
+      razones.push({
+        clave: 'margen',
+        nivel: 'verde',
+        texto: `Te quedan ${dinero(margenDespues, f)} libres después de este gasto.`,
+      })
+    }
   }
 
   // 4. Vencimientos cercanos: contexto que el usuario necesita ver aunque todo
@@ -374,7 +410,11 @@ export function evaluarGasto(
     nivel: peorNivel(razones.map((r) => r.nivel)),
     razones,
     margenAntes: margen.margenLibre,
-    margenDespues,
+    // El número que se muestra al usuario es el binding (mínimo entre flujo y
+    // colchón), no el flujo crudo. Si la cuenta tiene $21 y el flujo dice
+    // $6,300, el binding es $21. La regla de los tests sin saldo declarado no
+    // se ve afectada: ahí colchón es null y el binding es el flujo.
+    margenDespues: margenRealDespues,
   }
 }
 

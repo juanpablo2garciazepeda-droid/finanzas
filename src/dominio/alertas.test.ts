@@ -430,3 +430,77 @@ describe('el veredicto distingue quedarse corto de tirar del ahorro', () => {
     expect(veredicto.nivel).toBe('rojo')
   })
 })
+
+describe('el simulador no miente cuando el saldo real es binding', () => {
+  /**
+   * Caso reportado: el usuario declaró $21 en su cuenta, la quincena aún no
+   * cae y la app le decía "te quedan $6,300 libres después de un gasto de
+   * $200". El flujo del ciclo (sueldo estimado / 2) leía 850k menos gastos
+   * previos, pero su cuenta solo traía 21 pesos. La respuesta tiene que
+   * cruzar el flujo con el colchón y reflejar el binding.
+   */
+  it('un gasto que cabe en el colchón pero rebasa el flujo se evalúa con el binding', () => {
+    // Sin transacciones, así el flujo queda en 850k y el colchón en 21. Sin
+    // compromiso de deuda, el binding es el mínimo(850k, 21) = 21.
+    const ctx = contexto({
+      hoy: '2026-08-19',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_700_000,
+        saldoInicial: 21_000,
+        saldoInicialFecha: '2026-08-16',
+      },
+    })
+    const margen = calcularMargen(ctx)
+    expect(margen.flujoDelCiclo).toBe(850_000)
+    expect(margen.colchonTotal).toBe(21_000)
+
+    // El flujo dice margen = 850k. La cuenta dice 21. El binding es 21.
+    const veredicto = evaluarGasto(20_000, 'comida', ctx)
+    // El binding - gasto = 21 - 20 = 1, sí alcanza.
+    expect(veredicto.margenDespues).toBe(1_000)
+    // La razón debe hablar de la cuenta, no del flujo.
+    const textoMargen = veredicto.razones.find((r) => r.clave === 'margen')?.texto ?? ''
+    expect(textoMargen).toContain('cuenta')
+    expect(textoMargen).not.toContain('6,300')
+  })
+
+  it('un gasto que rebasa el colchón se marca en rojo aunque el flujo diga que sí alcanza', () => {
+    const ctx = contexto({
+      hoy: '2026-08-19',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_700_000,
+        saldoInicial: 21_000,
+        saldoInicialFecha: '2026-08-16',
+      },
+    })
+    // 200 pesos de gasto con 21 en cuenta: el binding es 21, después = -179.
+    const veredicto = evaluarGasto(20_000, 'comida', ctx)
+    expect(veredicto.margenDespues).toBe(1_000)
+    // Si gastara $40 con $21 en cuenta, binding - gasto = -19 → rojo.
+    const rojo = evaluarGasto(40_000, 'comida', ctx)
+    expect(rojo.margenDespues).toBe(-19_000)
+    expect(rojo.nivel).toBe('rojo')
+    const textoRojo = rojo.razones.find((r) => r.clave === 'margen')?.texto ?? ''
+    expect(textoRojo).toContain('cuenta')
+    expect(textoRojo).toContain('quincena')
+  })
+
+  it('sin saldo declarado, la simulación sigue hablando del flujo del ciclo', () => {
+    // Si no declaró saldo, no hay binding y el comportamiento histórico
+    // (basado en el flujo) se mantiene.
+    const ctx = contexto({
+      hoy: '2026-08-19',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_700_000,
+      },
+    })
+    const veredicto = evaluarGasto(20_000, 'comida', ctx)
+    expect(veredicto.margenDespues).toBe(830_000)
+  })
+})
