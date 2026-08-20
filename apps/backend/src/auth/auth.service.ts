@@ -39,6 +39,8 @@ export interface JwtPayload {
    * sesiones), el token queda revocado.
    */
   ver: number;
+  /** Rol del usuario al emitir el token. Lo lee el RolesGuard. */
+  rol: 'usuario' | 'admin';
 }
 
 export interface PublicUser {
@@ -875,6 +877,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       ver: user.tokenVersion,
+      rol: user.rol,
     };
     const accessToken = this.jwt.sign(payload);
     return {

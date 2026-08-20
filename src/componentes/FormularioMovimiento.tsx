@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import type { MetodoPago, TipoMovimiento, Transaccion } from '@/dominio/tipos'
 import { evaluarGasto, calcularMargen } from '@/dominio/alertas'
 import { aCentavos, formatearMoneda } from '@/dominio/dinero'
@@ -36,6 +37,18 @@ export function FormularioMovimiento({
 }) {
   const { ctx, categoriasActivas, ajustes } = useFinanzas()
   const { mostrar } = useAvisos()
+  const reducido = useReducedMotion()
+
+  // Curva de la píldora del selector Gasto/Ingreso: rápida al cambiar, sin
+  // rebote. Misma curva en el press de las tarjetas de categoría.
+  const transPildora = reducido
+    ? { duration: 0.08 }
+    : { type: 'spring' as const, stiffness: 520, damping: 38, mass: 0.6 }
+  // "Lift" al presionar: la opción crece un poco y se eleva, como si el dedo
+  // la estuviera levantando del fondo. Al soltar, vuelve con un resorte. Es
+  // el mismo gesto que tiene un ítem de la pantalla de inicio de iOS cuando
+  // lo mantienes para moverlo, solo que aquí no hay dropzone.
+  const lift = reducido ? { scale: 1 } : { scale: 1.04, y: -2 }
 
   const [tipo, setTipo] = useState<TipoMovimiento>(tipoInicial)
   const [monto, setMonto] = useState('')
@@ -136,22 +149,37 @@ export function FormularioMovimiento({
         className="space-y-5"
       >
         <div className="grid grid-cols-2 gap-1 rounded-full bg-elevada p-1">
-          {(['egreso', 'ingreso'] as const).map((valor) => (
-            <button
-              key={valor}
-              type="button"
-              onClick={() => {
-                setTipo(valor)
-                setCategoriaId('')
-              }}
-              className={clases(
-                'rounded-full py-2 text-[15px] font-medium transition-colors',
-                tipo === valor ? 'bg-superficie text-tinta shadow-sm' : 'text-suave hover:text-tinta',
-              )}
-            >
-              {valor === 'egreso' ? 'Gasto' : 'Ingreso'}
-            </button>
-          ))}
+          {(['egreso', 'ingreso'] as const).map((valor) => {
+            const activo = tipo === valor
+            return (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => {
+                  setTipo(valor)
+                  setCategoriaId('')
+                }}
+                // La píldora blanca es el indicador de selección; el focus ring
+                // del navegador competiría con ella, así que lo apagamos en este
+                // grupo (la píldora se mueve con layoutId, ya hay feedback
+                // visual) y dejamos el anillo solo al navegar con teclado.
+                className={clases(
+                  'relative rounded-full py-2 text-[15px] font-medium transition-colors',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-acento/40',
+                  activo ? 'text-tinta' : 'text-suave hover:text-tinta',
+                )}
+              >
+                {activo && (
+                  <motion.span
+                    layoutId="pildora-tipo-movimiento"
+                    transition={transPildora}
+                    className="absolute inset-0 rounded-full bg-superficie shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                  />
+                )}
+                <span className="relative">{valor === 'egreso' ? 'Gasto' : 'Ingreso'}</span>
+              </button>
+            )
+          })}
         </div>
 
         <div>
@@ -178,13 +206,19 @@ export function FormularioMovimiento({
             {opciones.map((categoria) => {
               const activa = categoria.id === categoriaId
               return (
-                <button
+                <motion.button
                   key={categoria.id}
                   type="button"
                   onClick={() => setCategoriaId(categoria.id)}
                   aria-pressed={activa}
+                  // whileTap hace el "lift": la tarjeta se eleva y crece
+                  // un poco al presionar, vuelve con un spring al soltar.
+                  // Da la sensación de que el ítem responde al dedo, como
+                  // si se pudiera arrastrar.
+                  whileTap={activa ? undefined : lift}
+                  transition={transPildora}
                   className={clases(
-                    'flex flex-col items-center gap-1.5 rounded-campo border px-1 py-2.5 transition-all',
+                    'flex flex-col items-center gap-1.5 rounded-campo border px-1 py-2.5 transition-colors',
                     activa
                       ? 'border-acento bg-acento-suave'
                       : 'border-transparent bg-elevada hover:border-borde',
@@ -199,7 +233,7 @@ export function FormularioMovimiento({
                   <span className="w-full truncate text-center text-[11px] leading-tight text-suave">
                     {categoria.nombre}
                   </span>
-                </button>
+                </motion.button>
               )
             })}
           </div>

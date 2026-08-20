@@ -1,4 +1,5 @@
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ProveedorAuth, useAuth } from '@/estado/auth'
 import { ProveedorI18n } from '@/estado/i18n'
 import { Landing } from '@/paginas/Landing'
@@ -9,6 +10,7 @@ import { OlvidePassword } from '@/paginas/OlvidePassword'
 import { RestablecerPassword } from '@/paginas/RestablecerPassword'
 import { AvisoPrivacidad } from '@/paginas/AvisoPrivacidad'
 import { ProveedorAvisos } from '@/estado/avisos'
+import { EditorPerfilProvider } from '@/estado/editorPerfil'
 import { ProveedorFinanzas } from '@/estado/finanzas'
 import { LimiteDeError } from '@/componentes/LimiteDeError'
 import { MarcaGZ } from '@/componentes/Marca'
@@ -21,6 +23,7 @@ import { Presupuestos } from '@/paginas/Presupuestos'
 import { Deudas } from '@/paginas/Deudas'
 import { Metas } from '@/paginas/Metas'
 import { Ajustes } from '@/paginas/Ajustes'
+import { Admin } from '@/paginas/Admin'
 import { Recurrentes } from '@/paginas/Recurrentes'
 import { Onboarding, debeMostrarOnboarding } from '@/paginas/Onboarding'
 
@@ -68,9 +71,11 @@ function PuertaAutenticacion() {
 
   return (
     <ProveedorFinanzas>
-      <HashRouter>
-        <Contenido />
-      </HashRouter>
+      <EditorPerfilProvider>
+        <HashRouter>
+          <Contenido />
+        </HashRouter>
+      </EditorPerfilProvider>
     </ProveedorFinanzas>
   )
 }
@@ -96,38 +101,71 @@ function PantallaCargando() {
  * de esa dirección.
  */
 function RutasPublicas() {
+  const location = useLocation()
+  const reducido = useReducedMotion()
+  const transSalida = { duration: 0.06, ease: 'easeIn' as const }
+  const transEntrada = { duration: 0.14, ease: 'easeOut' as const }
+
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/entrar" element={<Login />} />
-      <Route path="/crear-cuenta" element={<CrearCuenta />} />
-      <Route path="/olvide-password" element={<OlvidePassword />} />
-      <Route path="/restablecer-password" element={<RestablecerPassword />} />
-      <Route path="/verificar-email" element={<VerificarEmail />} />
-      <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
-      <Route path="*" element={<Landing />} />
-    </Routes>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1, transition: transEntrada }}
+        exit={{ opacity: 0, transition: transSalida }}
+      >
+        <Routes location={location}>
+          <Route path="/" element={<Landing />} />
+          <Route path="/entrar" element={<Login />} />
+          <Route path="/crear-cuenta" element={<CrearCuenta />} />
+          <Route path="/olvide-password" element={<OlvidePassword />} />
+          <Route path="/restablecer-password" element={<RestablecerPassword />} />
+          <Route path="/verificar-email" element={<VerificarEmail />} />
+          <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
+          <Route path="*" element={<Landing />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
   )
 }
 
 function Contenido() {
   useAplicarApariencia()
   useRecordatorios()
+  const location = useLocation()
+  const reducido = useReducedMotion()
+
+  // Animación de página: solo opacidad, sin movimiento vertical. Sin
+  // resorte (no hay física que valga la pena en un fade puro): tween corto
+  // y predecible. La salida es más rápida que la entrada para que el gap
+  // entre las dos sea mínimo y no se note.
+  const transSalida = { duration: 0.06, ease: 'easeIn' as const }
+  const transEntrada = { duration: 0.14, ease: 'easeOut' as const }
 
   return (
     <Disposicion>
-      <Routes>
-        <Route path="/" element={<Tablero />} />
-        <Route path="/bienvenida" element={debeMostrarOnboarding() ? <Onboarding /> : <Tablero />} />
-        <Route path="/movimientos" element={<Movimientos />} />
-        <Route path="/presupuestos" element={<Presupuestos />} />
-        <Route path="/deudas" element={<Deudas />} />
-        <Route path="/metas" element={<Metas />} />
-        <Route path="/ajustes" element={<Ajustes />} />
-        <Route path="/recurrentes" element={<Recurrentes />} />
-        <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
-        <Route path="*" element={<Tablero />} />
-      </Routes>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: transEntrada }}
+          exit={{ opacity: 0, transition: transSalida }}
+        >
+          <Routes location={location}>
+            <Route path="/" element={<Tablero />} />
+            <Route path="/bienvenida" element={debeMostrarOnboarding() ? <Onboarding /> : <Tablero />} />
+            <Route path="/movimientos" element={<Movimientos />} />
+            <Route path="/presupuestos" element={<Presupuestos />} />
+            <Route path="/deudas" element={<Deudas />} />
+            <Route path="/metas" element={<Metas />} />
+            <Route path="/ajustes" element={<Ajustes />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/recurrentes" element={<Recurrentes />} />
+            <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
+            <Route path="*" element={<Tablero />} />
+          </Routes>
+        </motion.div>
+      </AnimatePresence>
     </Disposicion>
   )
 }

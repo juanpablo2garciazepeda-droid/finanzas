@@ -1,25 +1,27 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
-  ChevronDown,
+  AlertCircle,
+  Bell,
+  ChevronRight,
+  Database,
   Download,
-  Eye,
-  EyeOff,
   FileDown,
   FileUp,
-  LogOut,
+  Folder,
+  Mail,
+  Palette,
   Pencil,
   Plus,
   Repeat,
   ShieldOff,
   Trash2,
+  Wallet,
   X,
 } from 'lucide-react'
 import type { Acento, Categoria, TipoMovimiento } from '@/dominio/tipos'
 import { aCentavos, formatearMoneda } from '@/dominio/dinero'
-import { nombrePeriodo } from '@/dominio/fechas'
-import { NOMBRE_CICLO } from '@/dominio/ciclos'
+import { hoyISO, nombrePeriodo } from '@/dominio/fechas'
 import { PALETA } from '@/datos/categoriasIniciales'
 import {
   actualizarCategoria,
@@ -29,14 +31,15 @@ import {
   importarMovimientosCsv,
 } from '@/datos/repositorio'
 import { Avatar } from '@/componentes/Avatar'
-import { MENSAJE_ERROR_FOTO, prepararFotoPerfil } from '@/utilidades/imagen'
+import { useEditorPerfil } from '@/estado/editorPerfil'
+import { SeccionDesplegable } from '@/componentes/SeccionDesplegable'
 import { api } from '@/api/cliente'
 import { useAuth } from '@/estado/auth'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
 import { hayNotificaciones, pedirPermiso } from '@/estado/recordatorios'
-import { useI18n } from '@/estado/i18n'
-import { MUESTRA_ACENTO, NOMBRE_TEMA, useEsOscuro } from '@/estado/tema'
+import { useI18n, useT } from '@/estado/i18n'
+import { MUESTRA_ACENTO, useEsOscuro } from '@/estado/tema'
 import { CampoFecha } from '@/componentes/ui/CampoFecha'
 import {
   Boton,
@@ -77,102 +80,415 @@ export function Ajustes() {
     guardarAjustes,
   } = useFinanzas()
   const { mostrar } = useAvisos()
-  const { usuario, cerrarSesion, refrescar: refrescarAuth } = useAuth()
+  const { usuario, refrescar: refrescarAuth } = useAuth()
   const i18n = useI18n()
   const t = i18n.t
   const esOscuro = useEsOscuro()
+  const editorPerfil = useEditorPerfil()
   const [editandoCategoria, setEditandoCategoria] = useState<Categoria | 'nueva' | undefined>()
   const [borrandoCategoria, setBorrandoCategoria] = useState<Categoria | undefined>()
   const [generandoPDF, setGenerandoPDF] = useState(false)
-  const [editandoNombre, setEditandoNombre] = useState(false)
-  const [cambiandoPassword, setCambiandoPassword] = useState(false)
-  const [cambiandoCorreo, setCambiandoCorreo] = useState(false)
-  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
-  const [confirmandoLogoutAll, setConfirmandoLogoutAll] = useState(false)
-  const [reenviandoVerificacion, setReenviandoVerificacion] = useState(false)
   const [exportando, setExportando] = useState(false)
   const [importando, setImportando] = useState(false)
 
   return (
     <div className="space-y-6">
+      {/* ── 1. Perfil ─────────────────────────────────────────────────── */}
       <section>
-        <TituloSeccion>{t('ajustes.tu_cuenta')}</TituloSeccion>
-        <Tarjeta className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <FotoPerfil />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm text-tinta">{usuario?.email}</p>
-              <p className="mt-0.5 truncate text-[13px] text-tenue">{usuario?.displayName || 'Sin nombre'}</p>
+        <TituloSeccion>{t('ajustes.tu_perfil')}</TituloSeccion>
+        <Tarjeta>
+          <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left">
+            <Avatar
+              nombre={usuario?.displayName || usuario?.email || '?'}
+              foto={usuario?.fotoUrl}
+              tamano="xl"
+            />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="truncate text-base font-semibold text-tinta">
+                {usuario?.displayName || t('ajustes.sin_nombre')}
+              </p>
+              <p className="truncate text-sm text-suave">{usuario?.email}</p>
               {usuario && !usuario.emailVerificado && (
                 <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-ambar/10 px-2 py-0.5 text-[12px] text-ambar">
                   <X className="size-3" aria-hidden />
-                  Correo sin verificar
+                  {t('ajustes.correo_sin_verificar')}
                 </p>
               )}
               {usuario?.emailVerificado && (
                 <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-verde/10 px-2 py-0.5 text-[12px] text-verde">
                   <ShieldOff className="size-3 -scale-x-100" aria-hidden />
-                  Correo verificado
+                  {t('ajustes.correo_verificado')}
                 </p>
               )}
             </div>
-            <Boton variante="secundario" onClick={() => setEditandoNombre(true)}>
-              <Pencil className="size-4" aria-hidden />
-              Editar perfil
-            </Boton>
+            <button
+              type="button"
+              onClick={() => editorPerfil.abrir()}
+              className="shrink-0 rounded-md px-3 py-1.5 text-[14px] font-medium text-acento transition-colors hover:bg-acento/10"
+            >
+              {t('ajustes.editar_perfil')}
+            </button>
           </div>
         </Tarjeta>
       </section>
 
-      <SeccionCuenta
-        usuario={usuario}
-        reenviandoVerificacion={reenviandoVerificacion}
-        alReenviarVerificacion={async () => {
-          if (!usuario) return
-          setReenviandoVerificacion(true)
-          const res = await api.post('/auth/reenviar-verificacion', { email: usuario.email })
-          setReenviandoVerificacion(false)
-          mostrar(
-            res.ok
-              ? 'Te reenviamos el correo de verificación'
-              : (res.error ?? 'No se pudo reenviar'),
-          )
-        }}
-        alCambiarCorreo={() => setCambiandoCorreo(true)}
-        alCambiarPassword={() => setCambiandoPassword(true)}
-        alCerrarSesionEnTodos={() => setConfirmandoLogoutAll(true)}
-      />
+      {/* ── 2. Apariencia (combina Moneda + Idioma + Tema + Acento) ─── */}
+      <SeccionDesplegable
+        icono={Palette}
+        titulo={t('ajustes.apariencia')}
+        subtitulo={t('ajustes.apariencia_ayuda')}
+      >
+        <Tarjeta className="space-y-5">
+          <p className="text-[13px] text-tenue">{t('ajustes.apariencia_ayuda')}</p>
 
+          <div>
+            <span className="mb-2 block text-[13px] font-medium text-suave">
+              {t('ajustes.idioma')}
+            </span>
+            <Segmentado
+              etiqueta={t('ajustes.idioma')}
+              valor={i18n.idioma}
+              onCambiar={(v) => void i18n.setIdioma(v as 'es' | 'en')}
+              opciones={[
+                { valor: 'es', etiqueta: t('ajustes.idioma_es') },
+                { valor: 'en', etiqueta: t('ajustes.idioma_en') },
+              ]}
+            />
+          </div>
+
+          <div>
+            <span className="mb-2 block text-[13px] font-medium text-suave">
+              {t('ajustes.tema')}
+            </span>
+            <Segmentado
+              etiqueta={t('ajustes.tema')}
+              valor={ajustes.tema}
+              onCambiar={(tema) => void guardarAjustes({ tema })}
+              opciones={(['claro', 'oscuro', 'sistema'] as const).map((valor) => ({
+                valor,
+                etiqueta: t(`tema.${valor}`),
+              }))}
+            />
+          </div>
+
+          <div>
+            <span className="mb-2 block text-[13px] font-medium text-suave">
+              {t('ajustes.color_acento')}
+            </span>
+            <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={t('ajustes.color_acento')}>
+              {(Object.keys(MUESTRA_ACENTO) as Acento[]).map((opcion) => {
+                const muestra = MUESTRA_ACENTO[opcion]
+                const activo = ajustes.acento === opcion
+                return (
+                  <button
+                    key={opcion}
+                    type="button"
+                    role="radio"
+                    aria-checked={activo}
+                    aria-label={t(`acento.${opcion}`)}
+                    title={t(`acento.${opcion}`)}
+                    onClick={() => void guardarAjustes({ acento: opcion })}
+                    className={clases(
+                      'size-9 rounded-full transition-transform',
+                      activo
+                        ? 'ring-2 ring-tinta ring-offset-2 ring-offset-superficie'
+                        : 'hover:scale-110',
+                    )}
+                    style={{ backgroundColor: esOscuro ? muestra.oscuro : muestra.claro }}
+                  />
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <Campo etiqueta={t('ajustes.moneda')} htmlFor="moneda">
+              <Selector
+                id="moneda"
+                value={ajustes.moneda}
+                onChange={(e) => {
+                  const elegida = MONEDAS.find((m) => m.codigo === e.target.value)
+                  if (elegida) void guardarAjustes({ moneda: elegida.codigo, locale: elegida.locale })
+                }}
+              >
+                {MONEDAS.map((m) => (
+                  <option key={m.codigo} value={m.codigo}>
+                    {m.etiqueta}
+                  </option>
+                ))}
+              </Selector>
+            </Campo>
+            <p className="mt-1.5 text-xs text-tenue">
+              {t('ajustes.moneda_ayuda', {
+                ejemplo: formatearMoneda(123456, ajustes.moneda, ajustes.locale),
+              })}
+            </p>
+          </div>
+        </Tarjeta>
+      </SeccionDesplegable>
+
+      {/* ── 3. Tu dinero (combina Saldo + Ingreso + Ciclo) ──────────── */}
+      <SeccionDesplegable
+        icono={Wallet}
+        titulo={t('ajustes.tu_dinero')}
+        subtitulo={t('ajustes.tu_dinero_ayuda')}
+      >
+        <Tarjeta className="space-y-4">
+          <p className="text-[13px] text-tenue">{t('ajustes.tu_dinero_ayuda')}</p>
+
+          <CampoSaldo
+            valor={ajustes.saldoInicial}
+            fecha={ajustes.saldoInicialFecha}
+          />
+
+          <div className="border-t border-borde pt-4">
+            <CampoIngreso
+              valor={ajustes.ingresoMensual}
+              moneda={ajustes.moneda}
+              locale={ajustes.locale}
+            />
+          </div>
+
+          <div className="border-t border-borde pt-4">
+            <span className="mb-2 block text-[13px] font-medium text-suave">
+              {t('ajustes.cada_cuanto')}
+            </span>
+            <Segmentado
+              etiqueta={t('ajustes.cada_cuanto')}
+              valor={ajustes.cicloPago}
+              onCambiar={(cicloPago) => void guardarAjustes({ cicloPago })}
+              opciones={(['semanal', 'quincenal', 'mensual'] as const).map((valor) => ({
+                valor,
+                etiqueta: t(`ciclo.${valor}`),
+              }))}
+            />
+            <p className="mt-1.5 text-[13px] text-tenue">{t('ajustes.ciclo_ayuda')}</p>
+          </div>
+        </Tarjeta>
+      </SeccionDesplegable>
+
+      {/* ── 4. Alertas (combina Semáforo + Recordatorios) ───────────── */}
+      <SeccionDesplegable
+        icono={Bell}
+        titulo={t('ajustes.alertas')}
+        subtitulo={t('ajustes.alertas_ayuda')}
+      >
+        <Tarjeta className="space-y-5">
+          <p className="text-[13px] text-tenue">{t('ajustes.alertas_ayuda')}</p>
+
+          <Campo
+            etiqueta={t('ajustes.ventana_etiqueta')}
+            ayuda={t('ajustes.ventana_ayuda')}
+            htmlFor="dias"
+          >
+            <div className="flex items-center gap-3">
+              <input
+                id="dias"
+                type="range"
+                min={1}
+                max={30}
+                value={ajustes.diasAvisoVencimiento}
+                onChange={(e) =>
+                  void guardarAjustes({ diasAvisoVencimiento: Number(e.target.value) })
+                }
+                className="flex-1 accent-acento"
+              />
+              <span className="cifras w-16 text-right text-sm text-tinta">
+                {t('ajustes.dias', { n: ajustes.diasAvisoVencimiento })}
+              </span>
+            </div>
+          </Campo>
+
+          <Campo
+            etiqueta={t('ajustes.umbral_etiqueta')}
+            ayuda={t('ajustes.umbral_ayuda')}
+            htmlFor="umbral"
+          >
+            <div className="flex items-center gap-3">
+              <input
+                id="umbral"
+                type="range"
+                min={50}
+                max={95}
+                step={5}
+                value={Math.round(ajustes.umbralPrecaucion * 100)}
+                onChange={(e) =>
+                  void guardarAjustes({ umbralPrecaucion: Number(e.target.value) / 100 })
+                }
+                className="flex-1 accent-acento"
+              />
+              <span className="cifras w-16 text-right text-sm text-tinta">
+                {Math.round(ajustes.umbralPrecaucion * 100)}%
+              </span>
+            </div>
+          </Campo>
+
+          <div className="border-t border-borde pt-4">
+            <label className="flex items-start gap-3">
+              <Bell className="mt-0.5 size-4 text-tenue" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm text-tinta">{t('ajustes.avisar_pagos')}</span>
+                <span className="mt-0.5 block text-xs text-tenue">
+                  {hayNotificaciones() ? t('ajustes.avisar_ayuda') : t('ajustes.sin_notificaciones')}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={ajustes.notificacionesActivas}
+                onChange={async (e) => {
+                  if (!e.target.checked) {
+                    await guardarAjustes({ notificacionesActivas: false })
+                    return
+                  }
+                  const permitido = await pedirPermiso()
+                  if (permitido) {
+                    await guardarAjustes({
+                      notificacionesActivas: true,
+                      ultimaRevisionVencimientos: '',
+                    })
+                    mostrar(t('aviso.avisare_pagos'))
+                  } else {
+                    mostrar(t('aviso.notificaciones_bloqueadas'), 'error')
+                  }
+                }}
+                disabled={!hayNotificaciones()}
+                className="size-4 shrink-0 accent-acento"
+              />
+            </label>
+          </div>
+
+          <div className="border-t border-borde pt-4">
+            <label className="flex items-start gap-3">
+              <Mail className="mt-0.5 size-4 text-tenue" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm text-tinta">{t('ajustes.resumen_semanal')}</span>
+                <span className="mt-0.5 block text-xs text-tenue">
+                  {t('ajustes.resumen_ayuda')}
+                </span>
+              </span>
+              {usuario && (
+                <input
+                  type="checkbox"
+                  checked={usuario.recibirDigest}
+                  onChange={async (e) => {
+                    const r = await api.patch<{ user: { recibirDigest: boolean } }>(
+                      '/auth/perfil',
+                      { recibirDigest: e.target.checked },
+                    )
+                    if (r.ok) {
+                      await refrescarAuth()
+                      mostrar(t(e.target.checked ? 'aviso.resumen_si' : 'aviso.resumen_no'))
+                    }
+                  }}
+                  className="size-4 shrink-0 accent-acento"
+                />
+              )}
+            </label>
+          </div>
+        </Tarjeta>
+      </SeccionDesplegable>
+
+      {/* ── 5. Categorías ───────────────────────────────────────────── */}
+      <SeccionDesplegable
+        icono={Folder}
+        titulo={t('ajustes.categorias_mostrar')}
+        subtitulo={`${t('ajustes.categorias')} · ${categorias.length}`}
+      >
+        <Tarjeta className="p-0">
+          <div className="flex items-center justify-between border-b border-borde px-4 py-2.5">
+            <span className="text-sm text-tinta">{t('ajustes.categorias')}</span>
+            <Boton
+              variante="secundario"
+              onClick={() => setEditandoCategoria('nueva')}
+              className="px-3 py-1 text-[13px]"
+            >
+              <Plus className="size-3.5" aria-hidden />
+              {t('ajustes.nueva_categoria')}
+            </Boton>
+          </div>
+          <div className="divide-y divide-borde">
+            {categorias.map((categoria) => (
+              <div key={categoria.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span
+                  className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `${categoria.color}1f` }}
+                >
+                  <Icono
+                    nombre={categoria.icono}
+                    className="size-4"
+                    style={{ color: categoria.color }}
+                    strokeWidth={1.75}
+                  />
+                </span>
+                <span
+                  className={clases(
+                    'min-w-0 flex-1 truncate text-sm',
+                    categoria.archivada ? 'text-tenue line-through' : 'text-tinta',
+                  )}
+                >
+                  {categoria.nombre}
+                </span>
+                <span className="shrink-0 text-xs text-tenue">
+                  {t(categoria.tipo === 'ingreso' ? 'comun.ingreso' : 'comun.gasto')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditandoCategoria(categoria)}
+                  aria-label={t('ajustes.editar_nombre_cat', { nombre: categoria.nombre })}
+                  className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+                >
+                  <Pencil className="size-3.5" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBorrandoCategoria(categoria)}
+                  aria-label={t('ajustes.eliminar_nombre_cat', { nombre: categoria.nombre })}
+                  className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-rojo/10 hover:text-rojo"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Tarjeta>
+      </SeccionDesplegable>
+
+      {/* ── 7. Automatización (plantillas recurrentes) ───────────────── */}
       <section>
         <TituloSeccion>{t('ajustes.automatizacion')}</TituloSeccion>
-        <Tarjeta>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          to="/recurrentes"
+          className="flex items-center justify-between gap-3 rounded-tarjeta bg-superficie p-4 shadow-tarjeta transition-colors hover:bg-elevada sm:p-5"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-full bg-acento/10 text-acento">
+              <Repeat className="size-4" aria-hidden />
+            </span>
             <div className="min-w-0">
               <p className="text-sm text-tinta">{t('ajustes.recurrentes_desc')}</p>
               <p className="mt-0.5 text-[13px] text-tenue">
-                Crea plantillas (Netflix, la renta, tu sueldo…) y se agregan solas cada mes.
+                {t('ajustes.recurrentes_ayuda')}
               </p>
             </div>
-            <Link
-              to="/recurrentes"
-              className="inline-flex items-center gap-2 rounded-full border border-borde bg-elevada px-4 py-2 text-[15px] text-acento transition-colors hover:bg-hundida"
-            >
-              <Repeat className="size-4" aria-hidden />
-              Administrar
-            </Link>
           </div>
-        </Tarjeta>
+          <ChevronRight className="size-5 text-suave" aria-hidden />
+        </Link>
       </section>
 
-      <section>
-        <TituloSeccion>{t('ajustes.tus_datos')}</TituloSeccion>
-        <Tarjeta className="space-y-3">
+      {/* ── 8. Tus datos (exportar, importar, reportes) ──────────────── */}
+      <SeccionDesplegable
+        icono={Database}
+        titulo={t('ajustes.tus_datos')}
+        subtitulo={t('ajustes.tus_datos_ayuda')}
+      >
+        <Tarjeta className="space-y-4">
+          <p className="text-[13px] text-tenue">{t('ajustes.tus_datos_ayuda')}</p>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm text-tinta">{t('ajustes.exportar_desc')}</p>
               <p className="mt-0.5 text-[13px] text-tenue">
-                Descarga una copia completa (categorías, movimientos, deudas, metas, recurrentes,
-                ajustes) en formato JSON. Lo que la ley te garantiza tener.
+                {t('ajustes.exportar_ayuda')}
               </p>
             </div>
             <Boton
@@ -191,16 +507,16 @@ export function Ajustes() {
                   a.download = `finanzas-gz-${new Date().toISOString().slice(0, 10)}.json`
                   a.click()
                   URL.revokeObjectURL(url)
-                  mostrar('Descarga iniciada')
+                  mostrar(t('aviso.descarga_iniciada'))
                 } catch (err) {
-                  mostrar(err instanceof Error ? err.message : 'No se pudo exportar', 'error')
+                  mostrar(err instanceof Error ? err.message : t('aviso.no_exportar'), 'error')
                 } finally {
                   setExportando(false)
                 }
               }}
             >
               <FileDown className="size-4" aria-hidden />
-              {exportando ? 'Exportando…' : 'Exportar todo'}
+              {exportando ? t('ajustes.exportando') : t('ajustes.exportar_todo')}
             </Boton>
           </div>
 
@@ -209,8 +525,11 @@ export function Ajustes() {
               <div className="min-w-0">
                 <p className="text-sm text-tinta">{t('ajustes.importar_desc')}</p>
                 <p className="mt-0.5 text-[13px] text-tenue">
-                  Columnas: <code className="rounded bg-elevada px-1">fecha, tipo, monto, categoria, metodoPago, nota</code>.
-                  Las categorías nuevas se crean al vuelo.
+                  {t('ajustes.columnas')}{' '}
+                  <code className="rounded bg-elevada px-1">
+                    fecha, tipo, monto, categoria, metodoPago, nota
+                  </code>
+                  . {t('ajustes.importar_ayuda')}
                 </p>
               </div>
               <span className="inline-flex items-center gap-2">
@@ -226,16 +545,22 @@ export function Ajustes() {
                     try {
                       const r = await importarMovimientosCsv(archivo)
                       mostrar(
-                        `Listo: ${r.insertadas} movimientos. ${r.categoriasCreadas.length} categorías nuevas.`,
+                        t('aviso.import_ok', {
+                          n: r.insertadas,
+                          m: r.categoriasCreadas.length,
+                        }),
                       )
                       if (r.errores.length > 0) {
-                        mostrar(`${r.errores.length} filas con error. Revisa la consola.`, 'error')
+                        mostrar(t('aviso.import_errores', { n: r.errores.length }), 'error')
                         // eslint-disable-next-line no-console
                         console.warn('Errores de importación:', r.errores)
                       }
                       await refrescar()
                     } catch (err) {
-                      mostrar(err instanceof Error ? err.message : 'No se pudo importar', 'error')
+                      mostrar(
+                        err instanceof Error ? err.message : t('aviso.no_importar'),
+                        'error',
+                      )
                     } finally {
                       setImportando(false)
                       e.target.value = ''
@@ -248,490 +573,76 @@ export function Ajustes() {
                   onClick={() => document.getElementById('importar-csv')?.click()}
                 >
                   <FileUp className="size-4" aria-hidden />
-                  {importando ? 'Importando…' : 'Elegir archivo'}
+                  {importando ? t('ajustes.importando') : t('ajustes.elegir_archivo')}
                 </Boton>
               </span>
             </label>
           </div>
-        </Tarjeta>
-      </section>
 
-      {editandoNombre && usuario && (
-        <EditarNombre
-          inicial={usuario.displayName}
-          onCerrar={() => setEditandoNombre(false)}
-          onGuardado={async () => {
-            await refrescarAuth()
-            mostrar('Nombre actualizado')
-            setEditandoNombre(false)
-          }}
-        />
-      )}
-
-      {cambiandoPassword && (
-        <CambiarPassword
-          onCerrar={() => setCambiandoPassword(false)}
-          onGuardado={() => {
-            setCambiandoPassword(false)
-            mostrar('Contraseña actualizada. En otros dispositivos se cerró la sesión.')
-          }}
-        />
-      )}
-
-      {cambiandoCorreo && (
-        <CambiarCorreo
-          correoActual={usuario?.email ?? ''}
-          onCerrar={() => setCambiandoCorreo(false)}
-          onEnviado={() => {
-            setCambiandoCorreo(false)
-            mostrar('Te enviamos un enlace al nuevo correo. Pícalo para confirmar.')
-          }}
-        />
-      )}
-
-      {confirmandoLogoutAll && (
-        <ConfirmarAccion
-          abierto
-          titulo="¿Cerrar sesión en todos tus dispositivos?"
-          mensaje="Cerraremos tu cuenta en todos los navegadores y teléfonos donde la tengas abierta. Aquí también te vamos a pedir volver a iniciar sesión."
-          textoConfirmar="Sí, cerrar todas"
-          textoCancelar="Cancelar"
-          onCerrar={() => setConfirmandoLogoutAll(false)}
-          onConfirmar={async () => {
-            const res = await api.post<{ mensaje: string }>('/auth/logout-all')
-            setConfirmandoLogoutAll(false)
-            if (res.ok) {
-              cerrarSesion()
-              mostrar('Listo, cerramos todas las sesiones')
-            } else {
-              mostrar(res.error ?? 'No se pudo cerrar todas las sesiones', 'error')
-            }
-          }}
-        />
-      )}
-
-      {confirmandoEliminar && (
-        <EliminarCuenta
-          onCerrar={() => setConfirmandoEliminar(false)}
-          onEliminado={() => {
-            cerrarSesion()
-            mostrar('Tu cuenta y tus datos fueron eliminados')
-          }}
-        />
-      )}
-
-      <section>
-        <TituloSeccion>{t('ajustes.zona_peligrosa')}</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm text-tinta">{t('ajustes.eliminar_desc')}</p>
-              <p className="mt-0.5 text-[13px] text-tenue">
-                Borramos tu cuenta y todos los movimientos, deudas, metas y categorías asociados. No se puede deshacer.
-              </p>
-            </div>
-            <Boton variante="peligro" onClick={() => setConfirmandoEliminar(true)}>
-              <Trash2 className="size-4" aria-hidden />
-              Eliminar cuenta
-            </Boton>
-          </div>
           <div className="border-t border-borde pt-3">
-            <Boton
-              variante="fantasma"
-              onClick={cerrarSesion}
-              className="w-full justify-center text-rojo hover:bg-rojo/10"
-            >
-              <LogOut className="size-4" aria-hidden />
-              Cerrar sesión
-            </Boton>
-          </div>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>{t('ajustes.moneda_formato')}</TituloSeccion>
-        <Tarjeta className="space-y-4">
-          <Campo etiqueta={t('ajustes.moneda')} htmlFor="moneda">
-            <Selector
-              id="moneda"
-              value={ajustes.moneda}
-              onChange={(e) => {
-                const elegida = MONEDAS.find((m) => m.codigo === e.target.value)
-                if (elegida) void guardarAjustes({ moneda: elegida.codigo, locale: elegida.locale })
-              }}
-            >
-              {MONEDAS.map((m) => (
-                <option key={m.codigo} value={m.codigo}>
-                  {m.etiqueta}
-                </option>
-              ))}
-            </Selector>
-          </Campo>
-          <p className="text-xs text-tenue">
-            Los montos ya registrados no se convierten: cambiar la moneda solo cambia cómo se muestran.
-            Ejemplo: {formatearMoneda(123456, ajustes.moneda, ajustes.locale)}.
-          </p>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>{t('ajustes.apariencia')}</TituloSeccion>
-        <Tarjeta className="space-y-5">
-          <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">{t('ajustes.idioma')}</span>
-            <Segmentado
-              etiqueta={t('ajustes.idioma')}
-              valor={i18n.idioma}
-              onCambiar={(v) => void i18n.setIdioma(v as 'es' | 'en')}
-              opciones={[
-                { valor: 'es', etiqueta: 'Español' },
-                { valor: 'en', etiqueta: 'English' },
-              ]}
-            />
-            <p className="mt-1.5 text-[13px] text-tenue">
-              Algunas cadenas aún no están traducidas; seguimos en ello.
-            </p>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">{t('ajustes.tema')}</span>
-            <Segmentado
-              etiqueta={t('ajustes.tema')}
-              valor={ajustes.tema}
-              onCambiar={(tema) => void guardarAjustes({ tema })}
-              opciones={(['claro', 'oscuro', 'sistema'] as const).map((valor) => ({
-                valor,
-                etiqueta: NOMBRE_TEMA[valor],
-              }))}
-            />
-            <p className="mt-1.5 text-[13px] text-tenue">
-              Automático sigue lo que tenga configurado tu teléfono o tu Mac.
-            </p>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">{t('ajustes.color_acento')}</span>
-            <div className="flex flex-wrap gap-3" role="radiogroup" aria-label={t('ajustes.color_acento')}>
-              {(Object.keys(MUESTRA_ACENTO) as Acento[]).map((opcion) => {
-                const muestra = MUESTRA_ACENTO[opcion]
-                const activo = ajustes.acento === opcion
-                return (
-                  <button
-                    key={opcion}
-                    type="button"
-                    role="radio"
-                    aria-checked={activo}
-                    aria-label={muestra.nombre}
-                    title={muestra.nombre}
-                    onClick={() => void guardarAjustes({ acento: opcion })}
-                    className={clases(
-                      'size-9 rounded-full transition-transform',
-                      activo
-                        ? 'ring-2 ring-tinta ring-offset-2 ring-offset-superficie'
-                        : 'hover:scale-110',
-                    )}
-                    style={{ backgroundColor: esOscuro ? muestra.oscuro : muestra.claro }}
-                  />
-                )
-              })}
-            </div>
-            <p className="mt-2 text-[13px] text-tenue">
-              Cada color tiene su versión clara y oscura: la que contrasta sobre blanco se apaga
-              sobre negro, así que no es el mismo tono en ambos temas.
-            </p>
-          </div>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>{t('ajustes.tu_dinero')}</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          <CampoSaldo
-            valor={ajustes.saldoInicial}
-            fecha={ajustes.saldoInicialFecha}
-          />
-          <p className="text-[13px] text-tenue">
-            Es una foto, no un dato que la app pueda adivinar. A partir de ella suma tus ingresos y
-            resta gastos, abonos a deudas y lo que apartas a metas, y así sabe cuánto te queda hoy.
-            Si te desfasas, vuelve aquí y pon el saldo real de nuevo.
-          </p>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>{t('ajustes.tu_ingreso')}</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          <CampoIngreso valor={ajustes.ingresoMensual} moneda={ajustes.moneda} locale={ajustes.locale} />
-          <div>
-            <span className="mb-2 block text-[13px] font-medium text-suave">Cada cuánto cobras</span>
-            <Segmentado
-              etiqueta={t('ajustes.cada_cuanto')}
-              valor={ajustes.cicloPago}
-              onCambiar={(cicloPago) => void guardarAjustes({ cicloPago })}
-              opciones={(['semanal', 'quincenal', 'mensual'] as const).map((valor) => ({
-                valor,
-                etiqueta: NOMBRE_CICLO[valor],
-              }))}
-            />
-            <p className="mt-1.5 text-[13px] text-tenue">
-              El tablero y el semáforo miden sobre esta ventana. Si cobras por quincena, "cuánto
-              puedo gastar" se calcula hasta tu próximo corte, no hasta fin de mes.
-            </p>
-          </div>
-
-          <p className="text-[13px] text-tenue">
-            El ingreso se toma primero de lo que de verdad entró en el ciclo; si aún no hay nada
-            registrado, se usa la parte de este sueldo que le toca; y si tampoco lo pones, tu
-            promedio de los últimos meses.
-          </p>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>Cómo te avisa el semáforo</TituloSeccion>
-        <Tarjeta className="space-y-5">
-          <div>
-            <Campo
-              etiqueta="Ventana de vencimientos"
-              ayuda="Un pago dentro de este plazo se aparta del margen antes de darte luz verde."
-              htmlFor="dias"
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  id="dias"
-                  type="range"
-                  min={1}
-                  max={30}
-                  value={ajustes.diasAvisoVencimiento}
-                  onChange={(e) => void guardarAjustes({ diasAvisoVencimiento: Number(e.target.value) })}
-                  className="flex-1 accent-acento"
-                />
-                <span className="cifras w-16 text-right text-sm text-tinta">
-                  {ajustes.diasAvisoVencimiento} días
-                </span>
-              </div>
-            </Campo>
-          </div>
-
-          <div>
-            <Campo
-              etiqueta="Umbral de precaución"
-              ayuda="A partir de este porcentaje del límite, el semáforo pasa a ámbar."
-              htmlFor="umbral"
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  id="umbral"
-                  type="range"
-                  min={50}
-                  max={95}
-                  step={5}
-                  value={Math.round(ajustes.umbralPrecaucion * 100)}
-                  onChange={(e) => void guardarAjustes({ umbralPrecaucion: Number(e.target.value) / 100 })}
-                  className="flex-1 accent-acento"
-                />
-                <span className="cifras w-16 text-right text-sm text-tinta">
-                  {Math.round(ajustes.umbralPrecaucion * 100)}%
-                </span>
-              </div>
-            </Campo>
-          </div>
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>Recordatorios de pago</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          <label className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={ajustes.notificacionesActivas}
-              onChange={async (e) => {
-                if (!e.target.checked) {
-                  await guardarAjustes({ notificacionesActivas: false })
-                  return
-                }
-                const permitido = await pedirPermiso()
-                if (permitido) {
-                  await guardarAjustes({ notificacionesActivas: true, ultimaRevisionVencimientos: '' })
-                  mostrar('Te avisaré de los pagos próximos')
-                } else {
-                  mostrar('El navegador bloqueó las notificaciones', 'error')
-                }
-              }}
-              disabled={!hayNotificaciones()}
-              className="mt-0.5 size-4 accent-acento"
-            />
-            <span>
-              <span className="block text-sm text-tinta">Avisarme de pagos próximos (en el navegador)</span>
-              <span className="mt-1 block text-xs text-tenue">
-                {hayNotificaciones()
-                  ? 'El aviso llega la primera vez que abres la app cada día, no a una hora fija.'
-                  : 'Este navegador no soporta notificaciones.'}
-              </span>
-            </span>
-          </label>
-
-          {usuario && (
-            <label className="flex items-start gap-3 border-t border-borde pt-3">
-              <input
-                type="checkbox"
-                checked={usuario.recibirDigest}
-                onChange={async (e) => {
-                  const r = await api.patch<{ user: { recibirDigest: boolean } }>('/auth/perfil', {
-                    recibirDigest: e.target.checked,
-                  })
-                  if (r.ok) {
-                    await refrescarAuth()
-                    mostrar(e.target.checked ? 'Te enviaremos el resumen' : 'No te enviaremos el resumen')
+            <p className="mb-2 text-sm text-tinta">{t('ajustes.exportar')}</p>
+            <div className="flex flex-wrap gap-2">
+              <Boton
+                variante="secundario"
+                disabled={!hayMovimientos || generandoPDF}
+                onClick={async () => {
+                  setGenerandoPDF(true)
+                  try {
+                    const { descargarReporteMensual } = await import('@/exportar/pdf')
+                    descargarReporteMensual(ctx, pagos)
+                    mostrar(t('aviso.reporte_descargado', { periodo: nombrePeriodo(periodo) }))
+                  } catch {
+                    mostrar(t('aviso.no_pdf'), 'error')
+                  } finally {
+                    setGenerandoPDF(false)
                   }
                 }}
-                className="mt-0.5 size-4 accent-acento"
-              />
-              <span>
-                <span className="block text-sm text-tinta">Resumen semanal por correo</span>
-                <span className="mt-1 block text-xs text-tenue">
-                  Cada lunes con tus ingresos, gastos y deuda de la semana anterior.
-                </span>
-              </span>
-            </label>
-          )}
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion
-          accion={
-            <Boton
-              variante="secundario"
-              onClick={() => setEditandoCategoria('nueva')}
-              className="px-4 py-2 text-[15px]"
-            >
-              <Plus className="size-4" aria-hidden />
-              Nueva categoría
-            </Boton>
-          }
-        >
-          Categorías
-        </TituloSeccion>
-        <Tarjeta className="divide-y divide-borde p-0">
-          {categorias.map((categoria) => (
-            <div key={categoria.id} className="flex items-center gap-3 px-4 py-2.5">
-              <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${categoria.color}1f` }}
               >
-                <Icono
-                  nombre={categoria.icono}
-                  className="size-4"
-                  style={{ color: categoria.color }}
-                  strokeWidth={1.75}
-                />
-              </span>
-              <span
-                className={clases(
-                  'min-w-0 flex-1 truncate text-sm',
-                  categoria.archivada ? 'text-tenue line-through' : 'text-tinta',
-                )}
+                <Download className="size-4" aria-hidden />
+                {generandoPDF ? t('ajustes.generando') : t('ajustes.reporte_mes')}
+              </Boton>
+              <Boton
+                variante="secundario"
+                disabled={!hayMovimientos || generandoPDF}
+                onClick={async () => {
+                  const anio = Number(periodo.slice(0, 4))
+                  setGenerandoPDF(true)
+                  try {
+                    const { descargarReporteAnual } = await import('@/exportar/pdf')
+                    descargarReporteAnual(ctx, pagos, anio)
+                    mostrar(t('aviso.reporte_anual_descargado', { anio }))
+                  } catch {
+                    mostrar(t('aviso.no_pdf'), 'error')
+                  } finally {
+                    setGenerandoPDF(false)
+                  }
+                }}
               >
-                {categoria.nombre}
-              </span>
-              <span className="shrink-0 text-xs text-tenue">
-                {categoria.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setEditandoCategoria(categoria)}
-                aria-label={`Editar ${categoria.nombre}`}
-                className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+                <Download className="size-4" aria-hidden />
+                {t('ajustes.reporte_anual')}
+              </Boton>
+              <Boton
+                variante="secundario"
+                disabled={!hayMovimientos}
+                onClick={() => {
+                  descargarMovimientosCSV(transacciones, categorias, 'finanzas-gz-movimientos')
+                  mostrar(t('aviso.csv_descargado'))
+                }}
               >
-                <Pencil className="size-3.5" aria-hidden />
-              </button>
-              <button
-                type="button"
-                onClick={() => setBorrandoCategoria(categoria)}
-                aria-label={`Eliminar ${categoria.nombre}`}
-                className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-rojo/10 hover:text-rojo"
-              >
-                <Trash2 className="size-3.5" aria-hidden />
-              </button>
+                <Download className="size-4" aria-hidden />
+                {t('ajustes.movimientos_csv')}
+              </Boton>
             </div>
-          ))}
-        </Tarjeta>
-      </section>
-
-      <section>
-        <TituloSeccion>Exportar</TituloSeccion>
-        <Tarjeta className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Boton
-              variante="secundario"
-              disabled={!hayMovimientos || generandoPDF}
-              onClick={async () => {
-                setGenerandoPDF(true)
-                try {
-                  // jsPDF pesa más que el resto de la app junta: se carga solo
-                  // cuando alguien pide de verdad un reporte.
-                  const { descargarReporteMensual } = await import('@/exportar/pdf')
-                  descargarReporteMensual(ctx, pagos)
-                  mostrar(`Reporte de ${nombrePeriodo(periodo)} descargado`)
-                } catch {
-                  mostrar('No se pudo generar el PDF', 'error')
-                } finally {
-                  setGenerandoPDF(false)
-                }
-              }}
-            >
-              <Download className="size-4" aria-hidden />
-              {generandoPDF ? 'Generando…' : 'Reporte PDF del mes'}
-            </Boton>
-            <Boton
-              variante="secundario"
-              disabled={!hayMovimientos || generandoPDF}
-              onClick={async () => {
-                const anio = Number(periodo.slice(0, 4))
-                setGenerandoPDF(true)
-                try {
-                  // Dinámico igual que el reporte mensual. Con uno solo de los
-                  // dos importado de forma estática, el bundler mete jsPDF y
-                  // html2canvas en el arranque de todos modos y el import
-                  // dinámico del otro deja de servir para nada.
-                  const { descargarReporteAnual } = await import('@/exportar/pdf')
-                  descargarReporteAnual(ctx, pagos, anio)
-                  mostrar(`Reporte ${anio} descargado`)
-                } catch {
-                  mostrar('No se pudo generar el PDF', 'error')
-                } finally {
-                  setGenerandoPDF(false)
-                }
-              }}
-            >
-              <Download className="size-4" aria-hidden />
-              Reporte anual PDF
-            </Boton>
-            <Boton
-              variante="secundario"
-              disabled={!hayMovimientos}
-              onClick={() => {
-                descargarMovimientosCSV(transacciones, categorias, 'finanzas-gz-movimientos')
-                mostrar('CSV descargado')
-              }}
-            >
-              <Download className="size-4" aria-hidden />
-              Todos los movimientos (CSV)
-            </Boton>
+            <p className="mt-2 text-xs text-tenue">{t('ajustes.csv_ayuda')}</p>
           </div>
-          <p className="text-xs text-tenue">
-            El CSV abre directo en Excel, Numbers y Google Sheets, con acentos y montos con decimales.
-          </p>
         </Tarjeta>
-      </section>
+      </SeccionDesplegable>
 
       {editandoCategoria && (
         <EditorCategoria
           valor={editandoCategoria}
           onCerrar={() => setEditandoCategoria(undefined)}
-          onGuardado={(nombre) => mostrar(`Categoría ${nombre} guardada`)}
+          onGuardado={(nombre) => mostrar(t('aviso.categoria_guardada', { nombre }))}
         />
       )}
 
@@ -747,17 +658,18 @@ export function Ajustes() {
             })
             .then((resultado) =>
               mostrar(
-                resultado === 'archivada'
-                  ? `${borrandoCategoria.nombre} tiene movimientos, así que la archivé en vez de borrarla`
-                  : `Eliminé ${borrandoCategoria.nombre}`,
+                t(
+                  resultado === 'archivada' ? 'aviso.categoria_archivada' : 'aviso.categoria_eliminada',
+                  { nombre: borrandoCategoria.nombre },
+                ),
                 'info',
               ),
             )
         }}
-        titulo="Eliminar categoría"
+        titulo={t('ajustes.eliminar_categoria')}
         mensaje={
           borrandoCategoria
-            ? `Si ${borrandoCategoria.nombre} tiene movimientos registrados, se archiva en lugar de borrarse para no dejar tu historial incompleto.`
+            ? t('ajustes.borrar_cat_mensaje', { nombre: borrandoCategoria.nombre })
             : ''
         }
       />
@@ -765,105 +677,7 @@ export function Ajustes() {
   )
 }
 
-/**
- * Acciones de cuenta que no quieres ver en la tarjeta principal:
- * reenviar verificación, cambiar correo/contraseña, cerrar sesión en todos
- * los dispositivos. Viven en un colapsable para que la cabecera "Tu cuenta"
- * se quede limpia: solo foto, correo, nombre y "Editar perfil". El ícono
- * gira 180° al expandir, y el panel entra con un spring para que se sienta
- * del mismo material que el resto de la app.
- */
-function SeccionCuenta({
-  usuario,
-  reenviandoVerificacion,
-  alReenviarVerificacion,
-  alCambiarCorreo,
-  alCambiarPassword,
-  alCerrarSesionEnTodos,
-}: {
-  usuario: { email: string; emailVerificado: boolean } | null
-  reenviandoVerificacion: boolean
-  alReenviarVerificacion: () => void | Promise<void>
-  alCambiarCorreo: () => void
-  alCambiarPassword: () => void
-  alCerrarSesionEnTodos: () => void
-}) {
-  const [abierto, setAbierto] = useState(false)
-  const reducido = useReducedMotion()
-  return (
-    <section>
-      <Tarjeta>
-        <button
-          type="button"
-          onClick={() => setAbierto((v) => !v)}
-          aria-expanded={abierto}
-          aria-controls="opciones-cuenta"
-          className="flex w-full items-center justify-between gap-3 text-left"
-        >
-          <span className="text-[15px] font-medium text-tinta">Más opciones de cuenta</span>
-          <motion.span
-            animate={{ rotate: abierto ? 180 : 0 }}
-            transition={reducido ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 24 }}
-            className="text-suave"
-          >
-            <ChevronDown className="size-5" aria-hidden />
-          </motion.span>
-        </button>
-        <AnimatePresence initial={false}>
-          {abierto && (
-            <motion.div
-              id="opciones-cuenta"
-              initial={reducido ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={reducido ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
-              transition={
-                reducido
-                  ? { duration: 0 }
-                  : { type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }
-              }
-              className="overflow-hidden"
-            >
-              <div className="mt-4 space-y-2 border-t border-borde pt-4">
-                {usuario && !usuario.emailVerificado && (
-                  <Boton
-                    variante="fantasma"
-                    disabled={reenviandoVerificacion}
-                    onClick={alReenviarVerificacion}
-                    className="w-full justify-start"
-                  >
-                    {reenviandoVerificacion ? 'Enviando…' : 'Reenviar correo de verificación'}
-                  </Boton>
-                )}
-                <Boton
-                  variante="fantasma"
-                  onClick={alCambiarCorreo}
-                  className="w-full justify-start"
-                >
-                  Cambiar correo
-                </Boton>
-                <Boton
-                  variante="fantasma"
-                  onClick={alCambiarPassword}
-                  className="w-full justify-start"
-                >
-                  Cambiar contraseña
-                </Boton>
-                <Boton
-                  variante="fantasma"
-                  onClick={alCerrarSesionEnTodos}
-                  className="w-full justify-start"
-                >
-                  <LogOut className="size-4" aria-hidden />
-                  Cerrar sesión en todos lados
-                </Boton>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Tarjeta>
-    </section>
-  )
-}
+
 
 function EditorCategoria({
   valor,
@@ -875,6 +689,7 @@ function EditorCategoria({
   onGuardado: (nombre: string) => void
 }) {
   const { refrescar } = useFinanzas()
+  const t = useT()
   const editando = valor !== 'nueva' ? valor : undefined
   // El componente se monta al abrirse, así que el estado inicial basta: nunca
   // arrastra lo que se capturó en la categoría anterior.
@@ -896,7 +711,7 @@ function EditorCategoria({
   }
 
   return (
-    <Modal abierto onCerrar={onCerrar} titulo={editando ? 'Editar categoría' : 'Nueva categoría'}>
+    <Modal abierto onCerrar={onCerrar} titulo={t(editando ? 'ajustes.editar_categoria' : 'ajustes.nueva_categoria')}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -904,20 +719,20 @@ function EditorCategoria({
         }}
         className="space-y-4"
       >
-        <Campo etiqueta="Nombre" htmlFor="nombreCat">
+        <Campo etiqueta={t('comun.nombre')} htmlFor="nombreCat">
           <Entrada
             id="nombreCat"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            placeholder="Café"
+            placeholder={t('ajustes.categoria_placeholder')}
             maxLength={30}
           />
         </Campo>
 
-        <Campo etiqueta="Tipo" htmlFor="tipoCat">
+        <Campo etiqueta={t('comun.tipo')} htmlFor="tipoCat">
           <Selector id="tipoCat" value={tipo} onChange={(e) => setTipo(e.target.value as TipoMovimiento)}>
-            <option value="egreso">Gasto</option>
-            <option value="ingreso">Ingreso</option>
+            <option value="egreso">{t('comun.gasto')}</option>
+            <option value="ingreso">{t('comun.ingreso')}</option>
           </Selector>
         </Campo>
 
@@ -926,7 +741,7 @@ function EditorCategoria({
         <SelectorIcono valor={icono} onCambio={setIcono} color={color} />
 
         <Boton type="submit" ancho disabled={nombre.trim() === ''}>
-          Guardar
+          {t('comun.guardar')}
         </Boton>
       </form>
     </Modal>
@@ -950,6 +765,7 @@ function CampoIngreso({
 }) {
   const { mostrar } = useAvisos()
   const { refrescar, guardarAjustes } = useFinanzas()
+  const t = useT()
   const [texto, setTexto] = useState(valor > 0 ? String(valor / 100) : '')
   const [guardando, setGuardando] = useState(false)
 
@@ -964,11 +780,13 @@ function CampoIngreso({
       await refrescar()
       mostrar(
         centavos > 0
-          ? `Listo: cuento con ${formatearMoneda(centavos, moneda, locale, { conDecimales: false })} al mes`
-          : 'Quité tu ingreso fijo; usaré tu promedio de los últimos meses',
+          ? t('aviso.ingreso_ok', {
+              monto: formatearMoneda(centavos, moneda, locale, { conDecimales: false }),
+            })
+          : t('aviso.ingreso_quitado'),
       )
     } catch {
-      mostrar('No se pudo guardar tu ingreso', 'error')
+      mostrar(t('aviso.no_ingreso'), 'error')
     } finally {
       setGuardando(false)
     }
@@ -976,8 +794,8 @@ function CampoIngreso({
 
   return (
     <Campo
-      etiqueta="Sueldo o ingreso fijo del mes"
-      ayuda="Con esto sé cuánto entra aunque la nómina todavía no caiga. Déjalo en cero si tus ingresos son variables."
+      etiqueta={t('ajustes.sueldo_etiqueta')}
+      ayuda={t('ajustes.sueldo_ayuda')}
       htmlFor="sueldo"
     >
       <div className="flex max-w-sm items-center gap-2">
@@ -995,7 +813,7 @@ function CampoIngreso({
           className="cifras text-lg"
         />
         <Boton onClick={() => void guardar()} disabled={!cambio || guardando} className="shrink-0">
-          {guardando ? 'Guardando…' : cambio ? 'Guardar' : 'Guardado'}
+          {guardando ? t('comun.guardando') : cambio ? t('comun.guardar') : t('comun.guardado')}
         </Boton>
       </div>
     </Campo>
@@ -1016,21 +834,33 @@ function CampoSaldo({
 }) {
   const { mostrar } = useAvisos()
   const { guardarAjustes } = useFinanzas()
+  const t = useT()
   const [monto, setMonto] = useState(valor > 0 ? String(valor / 100) : '')
+  // El form puede llegar con `fecha` vacía pero `valor` > 0 (datos viejos
+  // guardados antes de que la fecha fuera obligatoria). En ese caso inicial
+  // con vacío para que el aviso "falta fecha" sea visible y el usuario lo
+  // corrija; al teclear monto se autollena a hoy.
   const [fechaSaldo, setFechaSaldo] = useState(fecha)
   const [guardando, setGuardando] = useState(false)
 
   const centavos = aCentavos(monto)
+  // Guardar requiere monto Y fecha: un saldo sin fecha no es saldo, es un
+  // número sin ancla temporal. El backend lo aceptaba y el sistema lo
+  // ignoraba por completo, así que el usuario pensaba haberlo guardado.
+  const hayMonto = centavos > 0
+  const hayFecha = fechaSaldo !== ''
+  const faltaFecha = hayMonto && !hayFecha
   const cambio = centavos !== valor || fechaSaldo !== fecha
+  const puedeGuardar = cambio && hayFecha && centavos >= 0
 
   async function guardar() {
-    if (!cambio) return
+    if (!puedeGuardar) return
     setGuardando(true)
     try {
       await guardarAjustes({ saldoInicial: centavos, saldoInicialFecha: fechaSaldo })
-      mostrar('Saldo guardado')
+      mostrar(t('aviso.saldo_guardado'))
     } catch {
-      mostrar('No se pudo guardar el saldo', 'error')
+      mostrar(t('aviso.no_saldo'), 'error')
     } finally {
       setGuardando(false)
     }
@@ -1038,15 +868,25 @@ function CampoSaldo({
 
   return (
     <Campo
-      etiqueta="Saldo disponible a esta fecha"
-      ayuda="Una foto, no un cálculo. Úsalo la primera vez y cuando quieras recalibrar."
+      etiqueta={t('ajustes.saldo_etiqueta')}
+      ayuda={t('ajustes.saldo_ayuda')}
       htmlFor="saldo"
     >
       <div className="flex flex-wrap items-center gap-2">
         <EntradaMoneda
           id="saldo"
           value={monto}
-          onChange={(e) => setMonto(e.target.value)}
+          onChange={(e) => {
+            const nuevo = e.target.value
+            setMonto(nuevo)
+            // Si el usuario empieza a teclear un monto y aún no hay fecha,
+            // asumimos "hoy": es el ancla más conservadora (cuenta todos los
+            // movimientos desde este momento). El usuario puede cambiarla
+            // después si la quiere atrás.
+            if (aCentavos(nuevo) > 0 && fechaSaldo === '') {
+              setFechaSaldo(hoyISO())
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
@@ -1057,419 +897,23 @@ function CampoSaldo({
           className="cifras w-40 text-lg"
         />
         <CampoFecha valor={fechaSaldo} onCambio={setFechaSaldo} />
-        <Boton onClick={() => void guardar()} disabled={!cambio || guardando} className="shrink-0">
-          {guardando ? 'Guardando…' : cambio ? 'Guardar' : 'Guardado'}
+        <Boton onClick={() => void guardar()} disabled={!puedeGuardar || guardando} className="shrink-0">
+          {guardando ? t('comun.guardando') : cambio && hayFecha ? t('comun.guardar') : t('comun.guardado')}
         </Boton>
       </div>
+      {/* Aviso cuando hay monto sin fecha: sin esto el saldo se guarda pero
+          el sistema lo ignora por completo (calcularSaldo devuelve
+          `declarado: false`). El usuario quedaba pensando que su dinero
+          estaba registrado. */}
+      {faltaFecha && (
+        <p className="mt-2 flex items-start gap-2 text-[13px] text-ambar">
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            {t('ajustes.saldo_sin_fecha_aviso')}
+          </span>
+        </p>
+      )}
     </Campo>
   )
 }
 
-// ── Modales de cuenta ───────────────────────────────────────────────────
-
-function ConfirmarAccion({
-  abierto,
-  titulo,
-  mensaje,
-  textoConfirmar,
-  textoCancelar = 'Cancelar',
-  onCerrar,
-  onConfirmar,
-}: {
-  abierto: boolean
-  titulo: string
-  mensaje: string
-  textoConfirmar: string
-  textoCancelar?: string
-  onCerrar: () => void
-  onConfirmar: () => void | Promise<void>
-}) {
-  return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo={titulo}>
-      <p className="text-[14px] text-suave">{mensaje}</p>
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <Boton variante="fantasma" onClick={onCerrar}>
-          {textoCancelar}
-        </Boton>
-        <Boton variante="peligro" onClick={() => void onConfirmar()}>
-          {textoConfirmar}
-        </Boton>
-      </div>
-    </Modal>
-  )
-}
-
-function EditarNombre({
-  inicial,
-  onCerrar,
-  onGuardado,
-}: {
-  inicial: string
-  onCerrar: () => void
-  onGuardado: () => void | Promise<void>
-}) {
-  const { mostrar } = useAvisos()
-  const [nombre, setNombre] = useState(inicial)
-  const [guardando, setGuardando] = useState(false)
-
-  async function guardar() {
-    const limpio = nombre.trim()
-    if (limpio === '' || limpio === inicial) {
-      onCerrar()
-      return
-    }
-    setGuardando(true)
-    const res = await api.patch<{ user: { displayName: string } }>('/auth/perfil', {
-      displayName: limpio,
-    })
-    setGuardando(false)
-    if (!res.ok) {
-      mostrar(res.error ?? 'No se pudo guardar', 'error')
-      return
-    }
-    await onGuardado()
-  }
-
-  return (
-    <Modal abierto onCerrar={onCerrar} titulo="Editar nombre">
-      <Campo etiqueta="Cómo quieres que te diga la app" htmlFor="nuevo-nombre">
-        <Entrada
-          id="nuevo-nombre"
-          autoFocus
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          maxLength={80}
-        />
-      </Campo>
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <Boton variante="fantasma" onClick={onCerrar}>
-          Cancelar
-        </Boton>
-        <Boton onClick={() => void guardar()} disabled={guardando}>
-          {guardando ? 'Guardando…' : 'Guardar'}
-        </Boton>
-      </div>
-    </Modal>
-  )
-}
-
-function CambiarPassword({
-  onCerrar,
-  onGuardado,
-}: {
-  onCerrar: () => void
-  onGuardado: () => void
-}) {
-  const { mostrar } = useAvisos()
-  const [actual, setActual] = useState('')
-  const [nuevo, setNuevo] = useState('')
-  const [confirmar, setConfirmar] = useState('')
-  const [mostrarPw, setMostrarPw] = useState(false)
-  const [guardando, setGuardando] = useState(false)
-
-  const cumple = nuevo.length >= 8 && /[a-z]/.test(nuevo) && /[A-Z]/.test(nuevo) && /[0-9]/.test(nuevo)
-  const coinciden = confirmar.length === 0 || confirmar === nuevo
-  const listo = actual.length > 0 && cumple && nuevo === confirmar
-
-  async function guardar() {
-    if (!listo) return
-    setGuardando(true)
-    const res = await api.patch('/auth/password', { actual, nuevo })
-    setGuardando(false)
-    if (!res.ok) {
-      mostrar(res.error ?? 'No se pudo cambiar la contraseña', 'error')
-      return
-    }
-    onGuardado()
-  }
-
-  return (
-    <Modal abierto onCerrar={onCerrar} titulo="Cambiar contraseña">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          void guardar()
-        }}
-        className="space-y-4"
-      >
-        <Campo etiqueta="Contraseña actual" htmlFor="actual">
-          <div className="relative">
-            <Entrada
-              id="actual"
-              type={mostrarPw ? 'text' : 'password'}
-              autoFocus
-              value={actual}
-              onChange={(e) => setActual(e.target.value)}
-              required
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setMostrarPw(!mostrarPw)}
-              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-tenue hover:text-tinta"
-              aria-label={mostrarPw ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
-            >
-              {mostrarPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
-          </div>
-        </Campo>
-        <Campo
-          etiqueta="Nueva contraseña"
-          htmlFor="nuevo"
-          ayuda="8+ caracteres, mayúscula, minúscula y un número."
-          error={nuevo.length > 0 && !cumple ? 'No cumple la política.' : undefined}
-        >
-          <Entrada
-            id="nuevo"
-            type={mostrarPw ? 'text' : 'password'}
-            value={nuevo}
-            onChange={(e) => setNuevo(e.target.value)}
-            required
-          />
-        </Campo>
-        <Campo
-          etiqueta="Repite la nueva contraseña"
-          htmlFor="confirmar"
-          error={!coinciden ? 'No coinciden.' : undefined}
-        >
-          <Entrada
-            id="confirmar"
-            type={mostrarPw ? 'text' : 'password'}
-            value={confirmar}
-            onChange={(e) => setConfirmar(e.target.value)}
-            required
-          />
-        </Campo>
-        <p className="text-[13px] text-tenue">
-          Al guardar, las otras sesiones abiertas en otros dispositivos se cerrarán.
-        </p>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Boton variante="fantasma" type="button" onClick={onCerrar}>
-            Cancelar
-          </Boton>
-          <Boton type="submit" disabled={!listo || guardando}>
-            {guardando ? 'Guardando…' : 'Guardar'}
-          </Boton>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function EliminarCuenta({
-  onCerrar,
-  onEliminado,
-}: {
-  onCerrar: () => void
-  onEliminado: () => void
-}) {
-  const { mostrar } = useAvisos()
-  const [password, setPassword] = useState('')
-  const [confirmar, setConfirmar] = useState('')
-  const [eliminando, setEliminando] = useState(false)
-
-  const listo = password.length > 0 && confirmar === 'ELIMINAR'
-
-  async function eliminar() {
-    if (!listo) return
-    setEliminando(true)
-    const res = await api.delete<{ mensaje: string }>('/auth/cuenta', { password })
-    setEliminando(false)
-    if (!res.ok) {
-      mostrar(res.error ?? 'No se pudo eliminar la cuenta', 'error')
-      return
-    }
-    onEliminado()
-  }
-
-  return (
-    <Modal abierto onCerrar={onCerrar} titulo="Eliminar tu cuenta">
-      <p className="text-[14px] text-suave">
-        Esto borra tu cuenta y todos los movimientos, categorías, deudas y metas asociados.
-        No se puede deshacer.
-      </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          void eliminar()
-        }}
-        className="mt-4 space-y-4"
-      >
-        <Campo etiqueta="Tu contraseña" htmlFor="pw-eliminar">
-          <Entrada
-            id="pw-eliminar"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-        </Campo>
-        <Campo
-          etiqueta='Escribe "ELIMINAR" para confirmar'
-          htmlFor="confirmar-eliminar"
-          error={confirmar.length > 0 && confirmar !== 'ELIMINAR' ? 'Debe ser exactamente ELIMINAR.' : undefined}
-        >
-          <Entrada
-            id="confirmar-eliminar"
-            value={confirmar}
-            onChange={(e) => setConfirmar(e.target.value)}
-            required
-          />
-        </Campo>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Boton variante="fantasma" type="button" onClick={onCerrar}>
-            Cancelar
-          </Boton>
-          <Boton variante="peligro" type="submit" disabled={!listo || eliminando}>
-            {eliminando ? 'Eliminando…' : 'Eliminar definitivamente'}
-          </Boton>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function CambiarCorreo({
-  correoActual,
-  onCerrar,
-  onEnviado,
-}: {
-  correoActual: string
-  onCerrar: () => void
-  onEnviado: () => void
-}) {
-  const { mostrar } = useAvisos()
-  const [nuevo, setNuevo] = useState('')
-  const [enviando, setEnviando] = useState(false)
-
-  const listo = /\S+@\S+\.\S+/.test(nuevo) && nuevo.toLowerCase() !== correoActual.toLowerCase()
-
-  async function enviar(e: FormEvent) {
-    e.preventDefault()
-    if (!listo) return
-    setEnviando(true)
-    const res = await api.post<{ mensaje: string }>('/auth/cambiar-correo', {
-      nuevoEmail: nuevo.trim(),
-    })
-    setEnviando(false)
-    if (!res.ok) {
-      mostrar(res.error ?? 'No se pudo solicitar el cambio', 'error')
-      return
-    }
-    onEnviado()
-  }
-
-  return (
-    <Modal abierto onCerrar={onCerrar} titulo="Cambiar correo">
-      <p className="text-[14px] text-suave">
-        Te enviaremos un enlace de verificación al <strong>nuevo</strong> correo. Tu correo actual
-        no cambia hasta que piques ese enlace.
-      </p>
-      <form onSubmit={enviar} className="mt-4 space-y-4">
-        <Campo etiqueta="Correo actual" htmlFor="correo-actual">
-          <Entrada id="correo-actual" type="email" value={correoActual} disabled />
-        </Campo>
-        <Campo etiqueta="Correo nuevo" htmlFor="correo-nuevo">
-          <Entrada
-            id="correo-nuevo"
-            type="email"
-            value={nuevo}
-            onChange={(e) => setNuevo(e.target.value)}
-            placeholder="nuevo@correo.com"
-            autoComplete="email"
-            required
-          />
-        </Campo>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Boton variante="fantasma" type="button" onClick={onCerrar}>
-            Cancelar
-          </Boton>
-          <Boton type="submit" disabled={!listo || enviando}>
-            {enviando ? 'Enviando…' : 'Enviar enlace'}
-          </Boton>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-/**
- * Foto de perfil, editable desde Ajustes.
- *
- * Se recorta y reescala en el navegador antes de subirla (ver
- * `utilidades/imagen.ts`): lo que llega al servidor es un JPEG de 256×256 de
- * unas decenas de KB, no la foto de 4 MB que salió de la cámara.
- */
-function FotoPerfil() {
-  const { usuario, refrescar } = useAuth()
-  const { mostrar } = useAvisos()
-  const entrada = useRef<HTMLInputElement>(null)
-  const [ocupado, setOcupado] = useState(false)
-
-  async function guardar(fotoUrl: string) {
-    setOcupado(true)
-    const res = await api.patch('/auth/perfil', { fotoUrl })
-    setOcupado(false)
-    if (!res.ok) {
-      mostrar(res.error ?? 'No se pudo guardar la foto', 'error')
-      return
-    }
-    await refrescar()
-    mostrar(fotoUrl ? 'Foto actualizada' : 'Foto quitada')
-  }
-
-  async function elegir(archivo: File | undefined) {
-    if (!archivo) return
-    setOcupado(true)
-    const res = await prepararFotoPerfil(archivo)
-    setOcupado(false)
-    if (!res.ok || !res.dataUrl) {
-      mostrar(MENSAJE_ERROR_FOTO[res.error ?? 'lectura'], 'error')
-      return
-    }
-    await guardar(res.dataUrl)
-  }
-
-  if (!usuario) return null
-
-  return (
-    <div className="flex shrink-0 flex-col items-center gap-2">
-      <Avatar
-        nombre={usuario.displayName || usuario.email}
-        foto={usuario.fotoUrl}
-        tamano="lg"
-      />
-      <input
-        ref={entrada}
-        type="file"
-        accept="image/*"
-        className="sr-only"
-        onChange={(e) => {
-          void elegir(e.target.files?.[0])
-          e.target.value = ''
-        }}
-      />
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          disabled={ocupado}
-          onClick={() => entrada.current?.click()}
-          className="rounded-full px-2 py-1 text-[12px] text-acento transition-colors hover:bg-elevada disabled:opacity-50"
-        >
-          {ocupado ? 'Espera…' : usuario.fotoUrl ? 'Cambiar' : 'Poner foto'}
-        </button>
-        {usuario.fotoUrl && (
-          <button
-            type="button"
-            disabled={ocupado}
-            onClick={() => void guardar('')}
-            className="rounded-full px-2 py-1 text-[12px] text-tenue transition-colors hover:bg-elevada hover:text-tinta disabled:opacity-50"
-          >
-            Quitar
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}

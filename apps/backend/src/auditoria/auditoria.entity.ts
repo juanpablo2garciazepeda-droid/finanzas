@@ -18,7 +18,10 @@ export type AccionAuditoria =
   | 'olvide_password'
   | 'eliminacion_cuenta'
   | 'logout_all'
-  | 'actualizacion_perfil';
+  | 'actualizacion_perfil'
+  | 'admin_eliminar_usuario'
+  | 'admin_forzar_reset'
+  | 'admin_cambiar_rol';
 
 /**
  * Bitácora de eventos sensibles de auth. El usuario ve la propia (en

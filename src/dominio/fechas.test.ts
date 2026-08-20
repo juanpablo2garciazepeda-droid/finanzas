@@ -7,9 +7,11 @@ import {
   fechaRelativa,
   mesesEntre,
   periodoDe,
+  periodoMasAntiguo,
   rangoPeriodo,
   siguienteOcurrencia,
   sumarMeses,
+  periodoActual,
   ultimosPeriodos,
 } from './fechas'
 
@@ -109,5 +111,40 @@ describe('fechaRelativa', () => {
   it('concuerda el plural en ambas direcciones', () => {
     expect(fechaRelativa('2026-08-13', '2026-08-15')).toBe('en 2 días')
     expect(fechaRelativa('2026-08-13', '2026-08-11')).toBe('hace 2 días')
+  })
+})
+
+describe('periodoMasAntiguo', () => {
+  it('sin ninguna fecha, el suelo es el mes en curso', () => {
+    expect(periodoMasAntiguo([])).toBe(periodoActual())
+  })
+
+  it('devuelve el periodo de la fecha más vieja', () => {
+    expect(periodoMasAntiguo(['2026-08-19', '2025-03-02', '2026-01-31'])).toBe('2025-03')
+  })
+
+  it('no le importa el orden en que lleguen', () => {
+    expect(periodoMasAntiguo(['2024-12-31', '2026-08-01'])).toBe(
+      periodoMasAntiguo(['2026-08-01', '2024-12-31']),
+    )
+  })
+
+  it('ignora vacíos y nulos, que es lo que manda un saldo inicial sin fecha', () => {
+    expect(periodoMasAntiguo(['', '2025-06-10', undefined, null])).toBe('2025-06')
+  })
+
+  it('si solo hay vacíos, cae en el mes en curso', () => {
+    expect(periodoMasAntiguo(['', undefined])).toBe(periodoActual())
+  })
+
+  it('un CSV con movimientos de hace años baja el suelo hasta allá', () => {
+    expect(periodoMasAntiguo(['2019-02-14', '2026-08-19'])).toBe('2019-02')
+  })
+
+  it('nunca devuelve un periodo futuro: se queda en el mes en curso', () => {
+    // Una fecha capturada mal (un dedazo en el año) no debe abrir meses
+    // que todavía no llegan.
+    const futuro = sumarMeses(periodoActual(), 6) + '-15'
+    expect(periodoMasAntiguo([futuro])).toBe(periodoActual())
   })
 })

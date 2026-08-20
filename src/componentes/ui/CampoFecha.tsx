@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { aFechaLocal, diasDelPeriodo, hoyISO, nombrePeriodo, periodoDe, sumarMeses } from '@/dominio/fechas'
+import { useT } from '@/estado/i18n'
 import { clases } from './Basicos'
 
 /**
@@ -62,6 +64,7 @@ export function CampoFecha({
   max?: string
   locale?: string
 }) {
+  const t = useT()
   const generado = useId()
   const idCampo = id ?? generado
   const [abierto, setAbierto] = useState(false)
@@ -142,7 +145,7 @@ export function CampoFecha({
     ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'long', year: 'numeric' }).format(
         aFechaLocal(valor),
       )
-    : 'Elegir fecha'
+    : t('comun.elegir_fecha')
 
   function elegir(fecha: string) {
     onCambio(fecha)
@@ -159,6 +162,123 @@ export function CampoFecha({
         ...(haciaArriba ? { bottom: posicion.abajo + 8 } : { top: posicion.top + 8 }),
       }
     : { position: 'fixed', visibility: 'hidden' }
+
+  const reducido = useReducedMotion()
+  // El picker es un dropdown contextual: la animación es más corta y más
+  // direccional que la del modal genérico. En lugar de venir de abajo
+  // (modal de pantalla completa), aparece desde el lado hacia el que se
+  // abrió el campo.
+  const transPicker = reducido
+    ? { duration: 0.06, ease: 'linear' as const }
+    : { type: 'spring' as const, stiffness: 520, damping: 36, mass: 0.6 }
+  const origenY = haciaArriba ? -8 : 8
+
+  // El portal se construye siempre, sin condicionar al `abierto`. Lo que se
+  // condiciona es el contenido: el `motion.div` vive dentro de
+  // `AnimatePresence`, que a su vez está dentro del portal. Si el portal
+  // fuera condicional (`abierto ? createPortal(...) : null`), `AnimatePresence`
+  // vería un `ReactPortal` como hijo y no detectaría bien el alta/baja, así
+  // que el panel nunca se monta al abrir. Con el `AnimatePresence` adentro,
+  // rastrea el `motion.div` directamente y la animación de entrada/salida
+  // funciona como debe.
+  const portal = createPortal(
+    <AnimatePresence>
+      {abierto && (
+        <motion.div
+          ref={panel}
+          role="dialog"
+          aria-label={t('comun.elegir_fecha')}
+          style={estiloPanel}
+          initial={{ opacity: 0, y: origenY, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: origenY, scale: 0.97 }}
+          transition={transPicker}
+          className="z-50 rounded-tarjeta border border-borde bg-superficie p-3 shadow-flotante"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setMesVisible(sumarMeses(mesVisible, -1))}
+              aria-label="Mes anterior"
+              className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+            </button>
+            <span aria-live="polite" className="text-[15px] font-medium text-tinta capitalize">
+              {nombrePeriodo(mesVisible)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMesVisible(sumarMeses(mesVisible, 1))}
+              aria-label="Mes siguiente"
+              className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
+            >
+              <ChevronRight className="size-4" aria-hidden />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-0.5">
+            {DIAS.map((dia, i) => (
+              <span key={`${dia}-${i}`} className="py-1 text-center text-[12px] font-medium text-tenue">
+                {dia}
+              </span>
+            ))}
+
+            {casillas.map((fecha, indice) => {
+              if (fecha === null) return <span key={`hueco-${indice}`} />
+              const numero = Number(fecha.slice(8, 10))
+              const elegida = fecha === valor
+              const esHoy = fecha === hoy
+              const deshabilitada = fueraDeRango(fecha)
+              return (
+                <button
+                  key={fecha}
+                  type="button"
+                  disabled={deshabilitada}
+                  aria-current={esHoy ? 'date' : undefined}
+                  aria-pressed={elegida}
+                  onClick={() => elegir(fecha)}
+                  className={clases(
+                    'cifras flex aspect-square items-center justify-center rounded-full text-[14px] transition-colors',
+                    elegida
+                      ? 'bg-acento font-semibold text-sobre-acento'
+                      : deshabilitada
+                        ? 'text-tenue/40'
+                        : 'text-tinta hover:bg-elevada',
+                    esHoy && !elegida && 'ring-1 ring-acento',
+                  )}
+                >
+                  {numero}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-2 flex items-center justify-between border-t border-borde pt-2">
+            <button
+              type="button"
+              onClick={() => elegir(hoy)}
+              disabled={fueraDeRango(hoy)}
+              className="rounded-full px-3 py-1.5 text-[13px] font-medium text-acento transition-colors hover:bg-elevada disabled:opacity-40"
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAbierto(false)
+                disparador.current?.focus()
+              }}
+              className="rounded-full px-3 py-1.5 text-[13px] text-suave transition-colors hover:bg-elevada hover:text-tinta"
+            >
+              Cerrar
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  )
 
   return (
     <div className="relative" ref={contenedor}>
@@ -179,97 +299,7 @@ export function CampoFecha({
         <CalendarDays className="size-[18px] shrink-0 text-acento" aria-hidden />
       </button>
 
-      {abierto &&
-        createPortal(
-          <div
-            ref={panel}
-            role="dialog"
-            aria-label="Elegir fecha"
-            style={estiloPanel}
-            className="animar-entrada z-50 rounded-tarjeta border border-borde bg-superficie p-3 shadow-flotante"
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setMesVisible(sumarMeses(mesVisible, -1))}
-                aria-label="Mes anterior"
-                className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
-              >
-                <ChevronLeft className="size-4" aria-hidden />
-              </button>
-              <span aria-live="polite" className="text-[15px] font-medium text-tinta capitalize">
-                {nombrePeriodo(mesVisible)}
-              </span>
-              <button
-                type="button"
-                onClick={() => setMesVisible(sumarMeses(mesVisible, 1))}
-                aria-label="Mes siguiente"
-                className="rounded-full p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
-              >
-                <ChevronRight className="size-4" aria-hidden />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-7 gap-0.5">
-              {DIAS.map((dia, i) => (
-                <span key={`${dia}-${i}`} className="py-1 text-center text-[12px] font-medium text-tenue">
-                  {dia}
-                </span>
-              ))}
-
-              {casillas.map((fecha, indice) => {
-                if (fecha === null) return <span key={`hueco-${indice}`} />
-                const numero = Number(fecha.slice(8, 10))
-                const elegida = fecha === valor
-                const esHoy = fecha === hoy
-                const deshabilitada = fueraDeRango(fecha)
-                return (
-                  <button
-                    key={fecha}
-                    type="button"
-                    disabled={deshabilitada}
-                    aria-current={esHoy ? 'date' : undefined}
-                    aria-pressed={elegida}
-                    onClick={() => elegir(fecha)}
-                    className={clases(
-                      'cifras flex aspect-square items-center justify-center rounded-full text-[14px] transition-colors',
-                      elegida
-                        ? 'bg-acento font-semibold text-sobre-acento'
-                        : deshabilitada
-                          ? 'text-tenue/40'
-                          : 'text-tinta hover:bg-elevada',
-                      esHoy && !elegida && 'ring-1 ring-acento',
-                    )}
-                  >
-                    {numero}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="mt-2 flex items-center justify-between border-t border-borde pt-2">
-              <button
-                type="button"
-                onClick={() => elegir(hoy)}
-                disabled={fueraDeRango(hoy)}
-                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-acento transition-colors hover:bg-elevada disabled:opacity-40"
-              >
-                Hoy
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAbierto(false)
-                  disparador.current?.focus()
-                }}
-                className="rounded-full px-3 py-1.5 text-[13px] text-suave transition-colors hover:bg-elevada hover:text-tinta"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {portal}
 
       {/* Valor real para formularios y autocompletado; nunca se muestra. */}
       <input type="hidden" name={idCampo} value={valor} readOnly />

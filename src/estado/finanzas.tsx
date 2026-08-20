@@ -10,7 +10,7 @@ import type {
   Transaccion,
 } from '@/dominio/tipos'
 import type { ContextoFinanciero } from '@/dominio/alertas'
-import { hoyISO, periodoActual } from '@/dominio/fechas'
+import { hoyISO, periodoActual, periodoMasAntiguo } from '@/dominio/fechas'
 import { cargarTodo, guardarAjustes as guardarAjustesApi } from '@/datos/repositorio'
 
 export interface EstadoFinanzas {
@@ -21,6 +21,9 @@ export interface EstadoFinanzas {
   periodo: string
   irAPeriodo: (periodo: string) => void
   esPeriodoActual: boolean
+  /** Mes más viejo al que se puede navegar: el del dato más antiguo de la cuenta. */
+  periodoMinimo: string
+  esPeriodoMinimo: boolean
   ajustes: Ajustes
   categorias: Categoria[]
   categoriasActivas: Categoria[]
@@ -126,13 +129,33 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
     const aportes = datos?.aportes ?? []
     const pagos = datos?.pagos ?? []
 
+    // El suelo del navegador de mes. Se mira todo lo que tiene fecha propia y
+    // no solo los movimientos: quien cargó una deuda o declaró su saldo antes
+    // de registrar su primer gasto no debe perder de vista ese mes.
+    const periodoMinimo = periodoMasAntiguo([
+      ...transacciones.map((t) => t.fecha),
+      ...pagos.map((p) => p.fecha),
+      ...aportes.map((a) => a.fecha),
+      ajustes.saldoInicialFecha,
+    ])
+
+    // Acota en vez de confiar en quien llama: la UI ya deshabilita las flechas
+    // en los extremos, pero un enlace viejo o un error de cálculo no deben
+    // dejar la vista en un mes sin datos del que no se puede volver.
+    const irAPeriodo = (destino: string) => {
+      const tope = periodoActual()
+      setPeriodo(destino < periodoMinimo ? periodoMinimo : destino > tope ? tope : destino)
+    }
+
     return {
       cargando: !listo,
       error,
       hoy,
       periodo,
-      irAPeriodo: setPeriodo,
+      irAPeriodo,
       esPeriodoActual: periodo === periodoActual(),
+      periodoMinimo,
+      esPeriodoMinimo: periodo === periodoMinimo,
       ajustes,
       categorias,
       categoriasActivas: categorias.filter((c) => !c.archivada),

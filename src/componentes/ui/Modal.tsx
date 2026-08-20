@@ -1,10 +1,21 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { clases } from './Basicos'
 
 /**
  * Hoja inferior en móvil, diálogo centrado en escritorio. Registrar un gasto
  * pasa por aquí, así que el contenido tiene que quedar al alcance del pulgar.
+ *
+ * Entrada y salida animadas con motion: el panel sube y se escala al abrir,
+ * y al cerrar hace el camino inverso. El backdrop también aparece y
+ * desaparece con fade. `AnimatePresence` se encarga de que la salida se
+ * reproduzca antes de desmontar: si lo desmontáramos al cerrar, el panel
+ * saltaría en vez de deslizarse.
+ *
+ * Quien tenga `prefers-reduced-motion` ve el modal sin animar: la duración
+ * se reduce a casi 0 y los springs se vuelven tweens lineales.
  */
 export function Modal({
   abierto,
@@ -30,6 +41,7 @@ export function Modal({
   // control del modal, robándole el foco a lo que se esté escribiendo.
   const onCerrarRef = useRef(onCerrar)
   onCerrarRef.current = onCerrar
+  const reducido = useReducedMotion()
 
   useEffect(() => {
     if (!abierto) return
@@ -67,49 +79,68 @@ export function Modal({
     }
   }, [abierto])
 
-  // Desmontar al cerrar es lo que garantiza que el contenido arranque limpio:
-  // un formulario que sobrevive escondido conserva lo que se escribió la vez
-  // anterior y lo muestra al volver a abrirlo.
-  if (!abierto) return null
+  // Curvas distintas según si la máquina del usuario prefiere menos
+  // movimiento. El spring normal es el que da la sensación física; el lineal
+  // es el plan B accesible.
+  const springEntrada = { type: 'spring' as const, stiffness: 420, damping: 34, mass: 0.8 }
+  const tweenReducida = { duration: 0.08, ease: 'linear' as const }
+  const transPanel = reducido ? tweenReducida : springEntrada
+  // El backdrop entra y sale más rápido que el panel: cuando aparece, oscurece
+  // antes de que el panel se asiente; cuando desaparece, lo hace casi al
+  // mismo tiempo que el panel termina de deslizarse.
+  const transBackdrop = { duration: reducido ? 0.06 : 0.22, ease: 'easeOut' as const }
 
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center">
-      <button
-        type="button"
-        aria-label="Cerrar"
-        onClick={onCerrar}
-        className="absolute inset-0 bg-black/25 backdrop-blur-sm"
-      />
-      <div
-        ref={panel}
-        role="dialog"
-        aria-modal="true"
-        aria-label={titulo}
-        className={clases(
-          'animar-entrada relative flex max-h-[92dvh] w-full flex-col overflow-hidden',
-          'rounded-t-[20px] bg-superficie shadow-flotante sm:rounded-[20px]',
-          ancho,
-        )}
-      >
-        <header className="flex items-start justify-between gap-4 border-b border-borde px-5 py-4">
-          <div>
-            <h2 className="font-display text-[21px] font-semibold text-tinta">{titulo}</h2>
-            {descripcion && <p className="mt-0.5 text-sm text-suave">{descripcion}</p>}
-          </div>
-          <button
+  return createPortal(
+    <AnimatePresence>
+      {abierto && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center">
+          <motion.button
             type="button"
-            onClick={onCerrar}
             aria-label="Cerrar"
-            className="-mt-1 -mr-1 rounded-full p-1.5 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+            onClick={onCerrar}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={transBackdrop}
+            className="absolute inset-0 bg-black/25 backdrop-blur-sm"
+          />
+          <motion.div
+            ref={panel}
+            role="dialog"
+            aria-modal="true"
+            aria-label={titulo}
+            initial={{ opacity: 0, y: reducido ? 0 : 24, scale: reducido ? 1 : 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: reducido ? 0 : 12, scale: reducido ? 1 : 0.98 }}
+            transition={transPanel}
+            className={clases(
+              'relative flex max-h-[92dvh] w-full flex-col overflow-hidden',
+              'rounded-t-[20px] bg-superficie shadow-flotante sm:rounded-[20px]',
+              ancho,
+            )}
           >
-            <X className="size-5" aria-hidden />
-          </button>
-        </header>
-        <div className="area-segura-inferior flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-          {children}
+            <header className="flex items-start justify-between gap-4 border-b border-borde px-5 py-4">
+              <div>
+                <h2 className="font-display text-[21px] font-semibold text-tinta">{titulo}</h2>
+                {descripcion && <p className="mt-0.5 text-sm text-suave">{descripcion}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={onCerrar}
+                aria-label="Cerrar"
+                className="-mt-1 -mr-1 rounded-full p-1.5 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+              >
+                <X className="size-5" aria-hidden />
+              </button>
+            </header>
+            <div className="area-segura-inferior flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+              {children}
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>,
+    document.body,
   )
 }
 

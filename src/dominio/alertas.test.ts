@@ -374,6 +374,30 @@ describe('el gasto diario nunca reparte los ahorros', () => {
     expect(margen.gastoDiarioSugerido).toBe(0)
   })
 
+  it('cuando el saldo real es menor que el flujo del ciclo, el sugerido respeta el saldo', () => {
+    // Caso típico al inicio de la quincena: el sueldo aún no cae pero la
+    // cuenta trae poco. Antes sugería repartir el sueldo futuro entre los
+    // días que faltan (optimista); ahora respeta lo que de verdad hay.
+    const ctx = contexto({
+      hoy: '2026-08-19',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_700_000,
+        saldoInicial: 21_000,
+        saldoInicialFecha: '2026-08-16',
+      },
+    })
+    const margen = calcularMargen(ctx)
+    // 1,700,000 / 2 quincenas = 850,000 estimados en este ciclo.
+    expect(margen.flujoDelCiclo).toBe(850_000)
+    // En la cuenta hoy hay 21, sin compromisos pendientes.
+    expect(margen.colchonTotal).toBe(21_000)
+    // El sugerido baja de 850k/12 a lo que el saldo permite repartir.
+    expect(margen.gastoDiarioSugerido).toBeLessThan(850_000 / margen.diasRestantes)
+    expect(margen.gastoDiarioSugerido).toBe(Math.floor(21_000 / margen.diasRestantes))
+  })
+
   it('un periodo ya cerrado no divide entre cero', () => {
     const margen = calcularMargen(contexto({ periodo: '2026-07' }))
     expect(margen.diasRestantes).toBe(0)

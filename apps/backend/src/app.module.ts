@@ -19,6 +19,7 @@ import { DigestModule } from './digest/digest.module';
 import { EmailModule } from './auth/email.module';
 import { HealthModule } from './health/health.module';
 import { InicioModule } from './inicio/inicio.module';
+import { AdminModule } from './admin/admin.module';
 import { AuditoriaController } from './auditoria/auditoria.controller';
 import { ThrottlerBackendGuard } from './common/throttler-bypass.guard';
 import { dataSourceOptions } from './database/data-source';
@@ -57,6 +58,7 @@ import { dataSourceOptions } from './database/data-source';
     AjustesModule,
     InicioModule,
     HealthModule,
+    AdminModule,
   ],
   controllers: [AuditoriaController],
   providers: [

@@ -154,6 +154,19 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
 
   const diasRestantes = esMesActual ? ciclo.diasRestantes : 0
 
+  // El "gasto diario sugerido" es la sugerencia cruda del flujo del ciclo
+  // dividida entre los días restantes. Cuando hay saldo declarado, ese
+  // número se cruza con el colchón repartido entre los mismos días: si el
+  // saldo real es más chico que el flujo (típico al inicio del ciclo, antes
+  // de que caiga el cobro), el saldo es el binding constraint y el sugerido
+  // baja a lo que de verdad hay en la cuenta. Sin saldo declarado se
+  // mantiene el comportamiento histórico (solo flujo).
+  const margenPorFlujo = diasRestantes > 0 ? Math.max(0, Math.floor(margenLibre / diasRestantes)) : 0
+  const margenPorColchon =
+    diasRestantes > 0 && colchonTotal !== null ? Math.max(0, Math.floor(colchonTotal / diasRestantes)) : null
+  const gastoDiarioSugerido =
+    margenPorColchon !== null ? Math.min(margenPorFlujo, margenPorColchon) : margenPorFlujo
+
   return {
     ciclo,
     ingresos,
@@ -168,7 +181,7 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
     colchonTotal,
     ingresosEstimados: ingresosReales === 0 && estimado > 0,
     diasRestantes,
-    gastoDiarioSugerido: diasRestantes > 0 ? Math.max(0, Math.floor(margenLibre / diasRestantes)) : 0,
+    gastoDiarioSugerido,
   }
 }
 

@@ -1,31 +1,97 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
   LayoutDashboard,
+  Pin,
+  PinOff,
   Plus,
   Receipt,
+  Shield,
   Target,
   Wallet,
+  X,
 } from 'lucide-react'
 import { nombrePeriodo, periodoActual, sumarMeses } from '@/dominio/fechas'
 import { useFinanzas } from '@/estado/finanzas'
 import { useAuth } from '@/estado/auth'
+import { useT } from '@/estado/i18n'
 import { clases } from './ui/Basicos'
 import { Avatar } from './Avatar'
-import { Logotipo } from './Marca'
+import { Logotipo, MarcaGZ } from './Marca'
 import { FormularioMovimiento } from './FormularioMovimiento'
+import { MenuUsuario, type PosicionMenu } from './MenuUsuario'
+import { EditorPerfil } from './EditorPerfil'
+import { useEditorPerfil } from '@/estado/editorPerfil'
 
+const ANCHO_MENU = 288 // w-72 de Tailwind
+
+/**
+ * Calcula la posición del popover según el trigger y el ancho del sidebar.
+ * En desktop el menú va pegado a la esquina inferior derecha del sidebar.
+ * En mobile va debajo del trigger, alineado a la derecha.
+ */
+function calcularPosicionMenu(
+  trigger: HTMLElement,
+  anchoSidebar: number,
+  esDesktop: boolean,
+): PosicionMenu {
+  const caja = trigger.getBoundingClientRect()
+  if (esDesktop) {
+    return {
+      top: window.innerHeight - 16, // 16px de margen inferior
+      left: anchoSidebar + 8,
+      originX: 'left',
+      originY: 'bottom',
+    }
+  }
+  // Mobile: debajo del trigger, alineado a la derecha
+  return {
+    top: caja.bottom + 8,
+    left: Math.max(8, caja.right - ANCHO_MENU),
+    originX: 'right',
+    originY: 'top',
+  }
+}
+
+// La etiqueta es una clave del diccionario, no el texto: si se guarda ya
+// traducida, la barra se queda en el idioma que hubiera al cargar el módulo.
 const SECCIONES = [
-  { ruta: '/', etiqueta: 'Tablero', Icono: LayoutDashboard },
-  { ruta: '/movimientos', etiqueta: 'Movimientos', Icono: Receipt },
-  { ruta: '/presupuestos', etiqueta: 'Presupuestos', Icono: Wallet },
-  { ruta: '/deudas', etiqueta: 'Deudas', Icono: CreditCard },
-  { ruta: '/metas', etiqueta: 'Metas', Icono: Target },
+  { ruta: '/', clave: 'tablero.titulo', Icono: LayoutDashboard },
+  { ruta: '/movimientos', clave: 'movimientos.titulo', Icono: Receipt },
+  { ruta: '/presupuestos', clave: 'presupuestos.titulo', Icono: Wallet },
+  { ruta: '/deudas', clave: 'deudas.titulo', Icono: CreditCard },
+  { ruta: '/metas', clave: 'metas.titulo', Icono: Target },
 ]
+
+/** Ancho de la barra lateral en píxeles, en cada estado. */
+const ANCHO_COLAPSADO = 68
+const ANCHO_EXPANDIDO = 248
+
+/**
+ * Estado pineado del sidebar, persistido en localStorage.
+ *
+ * - `null`  → nunca se decidió, no persistir todavía (default colapsado).
+ * - `true`  → pineado expandido, persiste entre sesiones.
+ * - `false` → pineado colapsado, persiste entre sesiones.
+ */
+function usePineado(): [boolean, (v: boolean) => void] {
+  const [pineado, setPineadoInterno] = useState<boolean | null>(null)
+  useEffect(() => {
+    const guardado = localStorage.getItem('gz.sidebarPineado')
+    if (guardado === 'true') setPineadoInterno(true)
+    else if (guardado === 'false') setPineadoInterno(false)
+    else setPineadoInterno(false)
+  }, [])
+  const setPineado = (v: boolean) => {
+    setPineadoInterno(v)
+    localStorage.setItem('gz.sidebarPineado', String(v))
+  }
+  return [pineado ?? false, setPineado]
+}
 
 /**
  * `true` cuando un campo de texto está enfocado. La barra inferior y el FAB
@@ -58,17 +124,36 @@ function useTecladoActivo(): boolean {
 
 export function Disposicion({ children }: { children: ReactNode }) {
   const [registrando, setRegistrando] = useState(false)
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const [posicionMenu, setPosicionMenu] = useState<PosicionMenu | null>(null)
   const { pathname } = useLocation()
+  const { usuario } = useAuth()
+  const editorPerfil = useEditorPerfil()
   const enAjustes = pathname === '/ajustes'
   const tecladoActivo = useTecladoActivo()
   const reducido = useReducedMotion()
 
+  const abrirMenu = (trigger: HTMLElement, esDesktop: boolean) => {
+    setPosicionMenu(calcularPosicionMenu(trigger, ANCHO_EXPANDIDO, esDesktop))
+    setMenuAbierto(true)
+  }
+  const cerrarMenu = () => {
+    setMenuAbierto(false)
+    // No limpiamos `posicionMenu` aquí: queremos que la animación de salida
+    // use la misma posición que la de entrada. Se limpia al cerrarse.
+  }
+
   return (
     <div className="min-h-dvh lg:flex">
-      <BarraLateral />
+      <BarraLateral
+        menuAbierto={menuAbierto}
+        onToggleMenu={(trigger) => abrirMenu(trigger, true)}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <Encabezado />
+        <Encabezado
+          onAbrirMenu={(trigger) => abrirMenu(trigger, false)}
+        />
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-4 pb-32 sm:px-6 lg:pb-10">{children}</main>
       </div>
 
@@ -94,56 +179,266 @@ export function Disposicion({ children }: { children: ReactNode }) {
       <NavegacionMovil tecladoActivo={tecladoActivo} />
 
       <FormularioMovimiento abierto={registrando} onCerrar={() => setRegistrando(false)} />
+
+      {editorPerfil.abierto && usuario && (
+        <EditorPerfil onCerrar={editorPerfil.cerrar} />
+      )}
+
+      <MenuUsuario
+        abierto={menuAbierto}
+        onCerrar={cerrarMenu}
+        onAbrirEditorPerfil={() => editorPerfil.abrir()}
+        posicion={posicionMenu}
+      />
     </div>
   )
 }
 
-function BarraLateral() {
+function BarraLateral({
+  menuAbierto,
+  onToggleMenu,
+}: {
+  menuAbierto: boolean
+  onToggleMenu: (trigger: HTMLElement) => void
+}) {
   const { usuario } = useAuth()
+  const t = useT()
+  const [pineado, setPineado] = usePineado()
+  const [enHover, setEnHover] = useState(false)
+  const editorPerfil = useEditorPerfil()
+  const reducido = useReducedMotion()
+  const { pathname } = useLocation()
+  const navegar = useNavigate()
+
+  // Si el EditorPerfil está abierto, el sidebar no responde al mouse y se
+  // colapsa, para que la atención se vaya al modal sin nada detrás.
+  // Si el menú del usuario está abierto, el sidebar se queda expandido
+  // (sin importar pin ni hover) para que el popover quede alineado.
+  const expandido = editorPerfil.abierto
+    ? false
+    : menuAbierto || pineado || enHover
+  const enAjustes = pathname === '/ajustes'
+  const enAjustesOpciones =
+    enAjustes || menuAbierto
+
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-borde bg-superficie px-3 py-6 lg:flex">
-      <div className="px-3 pb-8">
-        <Logotipo />
+    <motion.aside
+      onMouseEnter={() => !editorPerfil.abierto && setEnHover(true)}
+      onMouseLeave={() => !editorPerfil.abierto && setEnHover(false)}
+      animate={{ width: expandido ? ANCHO_EXPANDIDO : ANCHO_COLAPSADO }}
+      transition={
+        reducido
+          ? { duration: 0 }
+          : { type: 'spring', stiffness: 420, damping: 36, mass: 0.7 }
+      }
+      className="sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-borde bg-superficie py-6 lg:flex"
+    >
+      <div className="flex items-center justify-between px-4 pb-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <MarcaGZ tamano={expandido ? 28 : 32} />
+          <motion.span
+            initial={false}
+            animate={{
+              opacity: expandido ? 1 : 0,
+              width: expandido ? 'auto' : 0,
+            }}
+            transition={{ duration: reducido ? 0 : 0.15, delay: expandido ? 0.08 : 0 }}
+            className="overflow-hidden whitespace-nowrap font-display text-[17px] font-semibold tracking-[-0.03em] text-tinta"
+          >
+            Finanzas <span className="text-acento">GZ</span>
+          </motion.span>
+        </div>
+        {expandido && (
+          <button
+            type="button"
+            onClick={() => setPineado(!pineado)}
+            aria-label={pineado ? 'Despinear barra lateral' : 'Pinear barra lateral'}
+            title={pineado ? 'Despinear' : 'Pinear expandido'}
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+          >
+            {pineado ? (
+              <Pin className="size-3.5" aria-hidden style={{ fill: 'currentColor' }} />
+            ) : (
+              <PinOff className="size-3.5" aria-hidden />
+            )}
+          </button>
+        )}
       </div>
-      <nav className="flex flex-1 flex-col gap-1">
-        {SECCIONES.map(({ ruta, etiqueta, Icono }) => (
-          <NavLink
+
+      <nav className="flex flex-1 flex-col gap-1 px-3">
+        {SECCIONES.map(({ ruta, clave, Icono }) => (
+          <ItemNav
             key={ruta}
             to={ruta}
             end={ruta === '/'}
-            className={({ isActive }) =>
-              clases(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                isActive ? 'bg-acento-suave text-acento' : 'text-suave hover:bg-elevada hover:text-tinta',
-              )
-            }
-          >
-            <Icono className="size-[18px]" strokeWidth={1.75} aria-hidden />
-            {etiqueta}
-          </NavLink>
-        ))}
-      </nav>
-      <NavLink
-        to="/ajustes"
-        className={({ isActive }) =>
-          clases(
-            'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-            isActive ? 'bg-acento-suave text-acento' : 'text-suave hover:bg-elevada hover:text-tinta',
-          )
-        }
-      >
-        {usuario ? (
-          <Avatar
-            nombre={usuario.displayName || usuario.email}
-            foto={usuario.fotoUrl}
-            tamano="sm"
+            etiqueta={t(clave)}
+            Icono={Icono}
+            expandida={expandido}
           />
-        ) : (
-          <span className="flex size-7 items-center justify-center rounded-full bg-elevada" />
+        ))}
+        {/* Item de admin: solo visible para usuarios con rol 'admin'. */}
+        {usuario?.rol === 'admin' && (
+          <ItemNav
+            to="/admin"
+            etiqueta={t('admin.titulo')}
+            Icono={Shield}
+            expandida={expandido}
+          />
         )}
-        Ajustes
+      </nav>
+
+      <div className="relative px-3">
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={menuAbierto}
+          onClick={(e) => onToggleMenu(e.currentTarget)}
+          className={clases(
+            'relative flex w-full items-center rounded-xl py-2.5 text-sm transition-colors',
+            expandido ? 'gap-3 px-3' : 'justify-center px-0',
+            enAjustesOpciones
+              ? 'text-acento font-semibold'
+              : 'text-suave font-medium hover:text-tinta',
+          )}
+        >
+          {usuario ? (
+            <Avatar
+              nombre={usuario.displayName || usuario.email}
+              foto={usuario.fotoUrl}
+              tamano="sm"
+            />
+          ) : (
+            <span className="flex size-7 items-center justify-center rounded-full bg-elevada" />
+          )}
+          <motion.span
+            initial={false}
+            animate={{
+              opacity: expandido ? 1 : 0,
+              width: expandido ? 'auto' : 0,
+            }}
+            transition={{ duration: reducido ? 0 : 0.15, delay: expandido ? 0.08 : 0 }}
+            className="overflow-hidden whitespace-nowrap"
+          >
+            {t('ajustes.titulo')}
+          </motion.span>
+        </button>
+        <motion.span
+          aria-hidden
+          initial={false}
+          animate={{
+            scaleY: enAjustesOpciones ? 1 : 0,
+            opacity: enAjustesOpciones ? 1 : 0,
+          }}
+          transition={
+            reducido
+              ? { duration: 0 }
+              : { type: 'spring', stiffness: 500, damping: 30 }
+          }
+          style={{ originY: 0.5 }}
+          className="absolute left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-acento"
+        />
+      </div>
+    </motion.aside>
+  )
+}
+
+/** Item de navegación con etiqueta que se desvanece y tooltip flotante. */
+function ItemNav({
+  to,
+  end,
+  etiqueta,
+  Icono,
+  avatar,
+  expandida,
+  conHighlight = true,
+}: {
+  to: string
+  end?: boolean
+  etiqueta: string
+  Icono?: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  avatar?: ReactNode
+  expandida: boolean
+  /** Si false, no muestra el dot indicador (útil para Ajustes con su propio highlight). */
+  conHighlight?: boolean
+}) {
+  const reducido = useReducedMotion()
+  const [mostrarTooltip, setMostrarTooltip] = useState(false)
+  const { pathname } = useLocation()
+  const activo = end ? pathname === to : pathname.startsWith(to)
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => !expandida && setMostrarTooltip(true)}
+      onMouseLeave={() => setMostrarTooltip(false)}
+    >
+      <NavLink
+        to={to}
+        end={end}
+        className={clases(
+          'relative flex items-center rounded-xl py-2.5 text-sm transition-colors',
+          expandida ? 'gap-3 px-3' : 'justify-center px-0',
+          activo
+            ? 'text-acento font-semibold'
+            : 'text-suave font-medium hover:text-tinta',
+        )}
+      >
+        {Icono && (
+          <Icono
+            className="size-[18px] shrink-0"
+            strokeWidth={activo ? 2.25 : 1.75}
+            aria-hidden
+          />
+        )}
+        {avatar && <span className="shrink-0">{avatar}</span>}
+        <motion.span
+          initial={false}
+          animate={{
+            opacity: expandida ? 1 : 0,
+            width: expandida ? 'auto' : 0,
+          }}
+          transition={{ duration: reducido ? 0 : 0.15, delay: expandida ? 0.08 : 0 }}
+          className="overflow-hidden whitespace-nowrap"
+        >
+          {etiqueta}
+        </motion.span>
       </NavLink>
-    </aside>
+
+      {/* Dot indicador a la izquierda del item activo */}
+      {conHighlight && (
+        <motion.span
+          aria-hidden
+          initial={false}
+          animate={{
+            scaleY: activo ? 1 : 0,
+            opacity: activo ? 1 : 0,
+          }}
+          transition={
+            reducido
+              ? { duration: 0 }
+              : { type: 'spring', stiffness: 500, damping: 30 }
+          }
+          style={{ originY: 0.5 }}
+          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-acento"
+        />
+      )}
+
+      {/* Tooltip flotante cuando el sidebar está colapsado */}
+      <AnimatePresence>
+        {!expandida && mostrarTooltip && (
+          <motion.div
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -4 }}
+            transition={{ duration: reducido ? 0 : 0.12 }}
+            className="pointer-events-none absolute top-1/2 left-full z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg bg-tinta px-2.5 py-1 text-xs font-medium text-fondo shadow-tarjeta"
+            role="tooltip"
+          >
+            {etiqueta}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 
@@ -163,6 +458,7 @@ function NavegacionMovil({ tecladoActivo }: { tecladoActivo: boolean }) {
   const navegar = useNavigate()
   const { pathname } = useLocation()
   const barra = useRef<HTMLDivElement>(null)
+  const t = useT()
   const [arrastrando, setArrastrando] = useState(false)
   const [rutaPrevia, setRutaPrevia] = useState<string | null>(null)
   const reducido = useReducedMotion()
@@ -212,7 +508,7 @@ function NavegacionMovil({ tecladoActivo }: { tecladoActivo: boolean }) {
           setRutaPrevia(null)
         }}
       >
-        {SECCIONES.map(({ ruta, etiqueta, Icono }) => {
+        {SECCIONES.map(({ ruta, clave, Icono }) => {
           const esActiva = resaltada === ruta
           return (
             <button
@@ -246,7 +542,7 @@ function NavegacionMovil({ tecladoActivo }: { tecladoActivo: boolean }) {
                 }
               >
                 <Icono className="size-[22px]" strokeWidth={1.75} aria-hidden />
-                <span className="max-w-full truncate px-0.5">{etiqueta}</span>
+                <span className="max-w-full truncate px-0.5">{t(clave)}</span>
               </motion.span>
             </button>
           )
@@ -256,9 +552,16 @@ function NavegacionMovil({ tecladoActivo }: { tecladoActivo: boolean }) {
   )
 }
 
-function Encabezado() {
-  const { periodo, irAPeriodo, esPeriodoActual } = useFinanzas()
+function Encabezado({
+  onAbrirMenu,
+}: {
+  onAbrirMenu: (trigger: HTMLElement) => void
+}) {
+  const { periodo, irAPeriodo, esPeriodoActual, esPeriodoMinimo } = useFinanzas()
   const { usuario } = useAuth()
+  const { pathname } = useLocation()
+  const navegar = useNavigate()
+  const enAjustes = pathname === '/ajustes'
 
   return (
     <header className="sticky top-0 z-20 cristal border-b border-borde">
@@ -271,8 +574,9 @@ function Encabezado() {
           <button
             type="button"
             onClick={() => irAPeriodo(sumarMeses(periodo, -1))}
+            disabled={esPeriodoMinimo}
             aria-label="Mes anterior"
-            className="rounded-lg p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta"
+            className="rounded-lg p-1.5 text-suave transition-colors hover:bg-elevada hover:text-tinta disabled:opacity-30"
           >
             <ChevronLeft className="size-4" aria-hidden />
           </button>
@@ -296,19 +600,33 @@ function Encabezado() {
           </button>
         </div>
 
-        {/* Avatar: clic abre Ajustes. Reemplaza la ruedita para que el
-            destino "configuración" sea más natural (foto → perfil). */}
-        <NavLink
-          to="/ajustes"
-          aria-label="Ajustes"
-          className="shrink-0 lg:hidden"
-        >
-          {usuario ? (
-            <Avatar nombre={usuario.displayName || usuario.email} foto={usuario.fotoUrl} />
-          ) : (
-            <span className="flex size-9 items-center justify-center rounded-full bg-elevada" />
-          )}
-        </NavLink>
+        {/* En /ajustes el avatar se vuelve una X para volver al tablero:
+            en el resto de la app abre el menú del usuario (popover). */}
+        {enAjustes ? (
+          <button
+            type="button"
+            onClick={() => navegar('/')}
+            aria-label="Volver al tablero"
+            title="Volver al tablero"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-elevada text-tinta transition-colors hover:bg-acento hover:text-sobre-acento lg:hidden"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-label="Menú de la cuenta"
+            onClick={(e) => onAbrirMenu(e.currentTarget)}
+            className="shrink-0 lg:hidden"
+          >
+            {usuario ? (
+              <Avatar nombre={usuario.displayName || usuario.email} foto={usuario.fotoUrl} />
+            ) : (
+              <span className="flex size-9 items-center justify-center rounded-full bg-elevada" />
+            )}
+          </button>
+        )}
       </div>
     </header>
   )

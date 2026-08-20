@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Calendar, Plus, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft, Calendar, Plus, Trash2 } from 'lucide-react'
 import { Boton, Campo, Entrada, EntradaMoneda, Selector, Tarjeta, TituloSeccion, clases } from '@/componentes/ui/Basicos'
 import { Icono } from '@/componentes/ui/Icono'
 import { ConfirmarBorrado, Modal } from '@/componentes/ui/Modal'
@@ -55,6 +56,13 @@ export function Recurrentes() {
 
   return (
     <div className="space-y-6">
+      <Link
+        to="/ajustes"
+        className="inline-flex items-center gap-1.5 text-sm text-tenue transition-colors hover:text-tinta"
+      >
+        <ArrowLeft className="size-4" aria-hidden />
+        Ajustes
+      </Link>
       <section>
         <TituloSeccion
           accion={

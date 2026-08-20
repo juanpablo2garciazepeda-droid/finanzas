@@ -47,6 +47,34 @@ export function periodoActual(): string {
   return periodoDe(hoyISO())
 }
 
+/**
+ * El periodo más viejo de un puñado de fechas: el suelo del navegador de mes.
+ *
+ * Recibe las fechas sueltas (movimientos, pagos, aportes, el saldo inicial) en
+ * vez del contexto entero para que siga siendo una función de dominio sin
+ * conocer la forma de los datos de la app.
+ *
+ * Dos reglas que no son obvias:
+ *   · Sin fechas útiles devuelve el mes en curso, no una cadena vacía. Una
+ *     cuenta recién creada no tiene historia hacia atrás.
+ *   · Nunca devuelve un periodo futuro. Un año mal capturado ("2062" por
+ *     "2026") abriría meses que todavía no existen; el tope es el mes actual.
+ *
+ * Los periodos son 'YYYY-MM', así que comparar cadenas ordena igual que
+ * comparar fechas y no hace falta construir Date.
+ */
+export function periodoMasAntiguo(fechas: (string | null | undefined)[]): string {
+  const actual = periodoActual()
+  let minimo: string | null = null
+  for (const fecha of fechas) {
+    if (!fecha) continue
+    const periodo = periodoDe(fecha)
+    if (periodo === '' || periodo > actual) continue
+    if (minimo === null || periodo < minimo) minimo = periodo
+  }
+  return minimo ?? actual
+}
+
 export function sumarMeses(periodo: string, meses: number): string {
   const [anio, mes] = periodo.split('-').map(Number)
   const fecha = new Date(anio, mes - 1 + meses, 1)
