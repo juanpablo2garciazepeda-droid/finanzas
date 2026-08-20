@@ -142,16 +142,20 @@ export function generarRecomendaciones(
   }
 
   // Dinero libre del mes: a la deuda más cara, o a la meta más cercana.
-  if (margen.margenLibre > umbral('excedente', referencia)) {
+  //
+  // Se mide sobre el disponible, no sobre el flujo: mover dinero que todavía
+  // no cae en la cuenta deja a la persona en descubierto justo cuando siguió
+  // el consejo. Si el cobro aún no entra, no hay excedente que repartir.
+  if (margen.margenDisponible > umbral('excedente', referencia)) {
     const objetivo = deudaPrioritaria(ctx.deudas)
     if (objetivo) {
       const proyeccion = proyectarDeuda(objetivo, pagos, ctx.hoy)
-      const ahorrados = mesesAhorrados(objetivo, proyeccion.ritmoUsado, margen.margenLibre)
+      const ahorrados = mesesAhorrados(objetivo, proyeccion.ritmoUsado, margen.margenDisponible)
       lista.push({
         id: 'excedente-deuda',
         tipo: 'oportunidad',
         prioridad: 2,
-        titulo: `Tienes ${dinero(margen.margenLibre)} libres este mes`,
+        titulo: `Tienes ${dinero(margen.margenDisponible)} libres este mes`,
         detalle: objetivo.tasaInteres
           ? `Abónalos a ${objetivo.acreedor} (${objetivo.tasaInteres}% anual, tu tasa más alta)${ahorrados > 0 ? ` y la liquidas ${ahorrados} ${ahorrados === 1 ? 'mes' : 'meses'} antes` : ''}.`
           : `Abónalos a ${objetivo.acreedor}, tu saldo más chico: quitártelo de encima libera ese pago mensual.`,
@@ -166,7 +170,7 @@ export function generarRecomendaciones(
           id: 'excedente-meta',
           tipo: 'oportunidad',
           prioridad: 2,
-          titulo: `Tienes ${dinero(margen.margenLibre)} libres este mes`,
+          titulo: `Tienes ${dinero(margen.margenDisponible)} libres este mes`,
           detalle: `Sin deudas pendientes, el mejor destino es ${cercana.nombre}, tu meta más próxima a vencer.`,
           icono: 'Sparkles',
         })
@@ -463,12 +467,12 @@ export function generarRecomendaciones(
     })
   }
 
-  if (margen.ciclo.tipo !== 'mensual' && margen.margenLibre > 0 && margen.ciclo.diasRestantes <= 3) {
+  if (margen.ciclo.tipo !== 'mensual' && margen.margenDisponible > 0 && margen.ciclo.diasRestantes <= 3) {
     lista.push({
       id: 'sobrante-ciclo',
       tipo: 'oportunidad',
       prioridad: 4,
-      titulo: `Te sobran ${dinero(margen.margenLibre)} y ${esteCiclo(margen.ciclo.tipo)} cierra en ${margen.ciclo.diasRestantes} ${margen.ciclo.diasRestantes === 1 ? 'día' : 'días'}`,
+      titulo: `Te sobran ${dinero(margen.margenDisponible)} y ${esteCiclo(margen.ciclo.tipo)} cierra en ${margen.ciclo.diasRestantes} ${margen.ciclo.diasRestantes === 1 ? 'día' : 'días'}`,
       detalle: 'Muévelo hoy a una meta o a tu deuda más cara. Lo que se queda en la cuenta al empezar el siguiente ciclo se gasta solo.',
       icono: 'PiggyBank',
     })

@@ -504,3 +504,155 @@ describe('el simulador no miente cuando el saldo real es binding', () => {
     expect(veredicto.margenDespues).toBe(830_000)
   })
 })
+
+describe('el disponible real manda en todas las superficies, no solo en el simulador', () => {
+  /**
+   * El caso que reportó el usuario, con sus números: declaró $27 en el banco,
+   * la quincena todavía no cae y ya hay una deuda por vencer. El flujo del
+   * ciclo (sueldo estimado) dice $6,500 libres; la cuenta dice otra cosa.
+   *
+   * El arreglo anterior cruzó flujo y colchón dentro de `evaluarGasto`, pero
+   * dejó el cruce escondido ahí: el tablero, el desglose, el panel de dinero,
+   * las recomendaciones y el PDF siguieron leyendo `margenLibre` a secas. Por
+   * eso el tablero enseñaba "6,500 libres ÷ 12 días = 0 al día", una ecuación
+   * que no cuadra. El binding tiene que salir del dominio, una sola vez.
+   */
+  function cuentaFlacaQuincenaSinCaer() {
+    return contexto({
+      hoy: '2026-08-20',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_900_000,
+        saldoInicial: 2_700,
+        saldoInicialFecha: '2026-08-16',
+      },
+      deudas: [deuda({ id: 'd1', pagoMinimo: 300_000, fechaLimite: '2026-08-25' })],
+    })
+  }
+
+  it('margenDisponible es el mínimo entre el flujo del ciclo y el colchón real', () => {
+    const margen = calcularMargen(cuentaFlacaQuincenaSinCaer())
+
+    expect(margen.margenLibre).toBe(650_000)
+    expect(margen.colchonTotal).toBe(-297_300)
+    expect(margen.margenDisponible).toBe(-297_300)
+    expect(margen.limitadoPorSaldo).toBe(true)
+  })
+
+  it('sin saldo declarado el disponible sigue siendo el flujo del ciclo', () => {
+    const ctx = contexto({
+      hoy: '2026-08-20',
+      ajustes: { ...AJUSTES, cicloPago: 'quincenal', ingresoMensual: 1_900_000 },
+      deudas: [deuda({ id: 'd1', pagoMinimo: 300_000, fechaLimite: '2026-08-25' })],
+    })
+    const margen = calcularMargen(ctx)
+
+    expect(margen.margenDisponible).toBe(margen.margenLibre)
+    expect(margen.limitadoPorSaldo).toBe(false)
+  })
+
+  it('el gasto diario sugerido es el disponible dividido entre los días que faltan', () => {
+    // La ecuación que el tablero enseña tiene que cuadrar con la que calcula.
+    const margen = calcularMargen(cuentaFlacaQuincenaSinCaer())
+
+    expect(margen.gastoDiarioSugerido).toBe(
+      Math.max(0, Math.floor(margen.margenDisponible / margen.diasRestantes)),
+    )
+  })
+
+  it('el veredicto informa antes y después de la misma magnitud', () => {
+    const ctx = cuentaFlacaQuincenaSinCaer()
+    const veredicto = evaluarGasto(20_000, null, ctx)
+
+    expect(veredicto.margenAntes).toBe(calcularMargen(ctx).margenDisponible)
+    expect(veredicto.margenDespues).toBe(veredicto.margenAntes - 20_000)
+  })
+
+  it('gastar casi todo lo que hay en la cuenta avisa aunque el flujo sea enorme', () => {
+    // $1,000 en la cuenta y una quincena estimada de $10,000 que aún no cae.
+    // Gastar $900 deja la cuenta en $100: cabe, pero es el 90% de lo que hay.
+    const ctx = contexto({
+      hoy: '2026-08-20',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 2_000_000,
+        saldoInicial: 100_000,
+        saldoInicialFecha: '2026-08-16',
+      },
+    })
+    const veredicto = evaluarGasto(90_000, null, ctx)
+
+    expect(veredicto.margenDespues).toBe(10_000)
+    expect(veredicto.nivel).toBe('ambar')
+  })
+})
+
+describe('decir "todavía no cobro" cambia las cuentas, no solo esconde la tarjeta', () => {
+  /**
+   * La tarjeta "¿Ya cobraste?" ofrece dos respuestas y solo una servía: al
+   * decir que sí, el ingreso se registraba; al decir "todavía no", la tarjeta
+   * se ocultaba y el margen seguía repartiendo un sueldo que la persona
+   * acababa de decir que no tiene. La respuesta es un dato, no un descarte.
+   */
+  const SIN_COBRAR = {
+    hoy: '2026-08-20',
+    ajustes: { ...AJUSTES, cicloPago: 'quincenal' as const, ingresoMensual: 1_900_000 },
+  }
+
+  it('el estimado sigue siendo proyección pero deja de ser gastable', () => {
+    const margen = calcularMargen(contexto({ ...SIN_COBRAR, cicloSinCobrar: '2026-08-16' }))
+
+    // La proyección se conserva: es lo que tendrá cuando caiga la quincena.
+    expect(margen.margenLibre).toBe(950_000)
+    // Lo gastable hoy no incluye dinero que ella misma dijo que no ha llegado.
+    expect(margen.margenDisponible).toBe(0)
+    expect(margen.cobroPendiente).toBe(true)
+  })
+
+  it('la respuesta solo vale para el ciclo en que se dio', () => {
+    const margen = calcularMargen(contexto({ ...SIN_COBRAR, cicloSinCobrar: '2026-08-01' }))
+
+    expect(margen.cobroPendiente).toBe(false)
+    expect(margen.margenDisponible).toBe(950_000)
+  })
+
+  it('registrar el cobro deja sin efecto la respuesta anterior', () => {
+    const margen = calcularMargen(
+      contexto({
+        ...SIN_COBRAR,
+        cicloSinCobrar: '2026-08-16',
+        transacciones: [
+          transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 950_000, fecha: '2026-08-16' }),
+        ],
+      }),
+    )
+
+    expect(margen.cobroPendiente).toBe(false)
+    expect(margen.margenDisponible).toBe(950_000)
+  })
+
+  it('con saldo declarado manda la cuenta, que ya sabe que el cobro no cayó', () => {
+    // Tiene $27 en el banco y dijo que todavía no cobra. Puede gastar esos
+    // $27: son suyos y están ahí. Decirle que tiene cero también sería falso.
+    const margen = calcularMargen(
+      contexto({
+        ...SIN_COBRAR,
+        ajustes: { ...SIN_COBRAR.ajustes, saldoInicial: 2_700, saldoInicialFecha: '2026-08-16' },
+        cicloSinCobrar: '2026-08-16',
+      }),
+    )
+
+    expect(margen.cobroPendiente).toBe(true)
+    expect(margen.margenDisponible).toBe(2_700)
+  })
+
+  it('no autoriza un gasto contra un sueldo que la persona dijo que no ha caído', () => {
+    const ctx = contexto({ ...SIN_COBRAR, cicloSinCobrar: '2026-08-16' })
+    const veredicto = evaluarGasto(20_000, null, ctx)
+
+    expect(veredicto.nivel).toBe('rojo')
+    expect(veredicto.margenDespues).toBe(-20_000)
+  })
+})

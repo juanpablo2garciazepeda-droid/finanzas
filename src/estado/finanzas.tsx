@@ -42,6 +42,14 @@ export interface EstadoFinanzas {
    * de bienvenida como si no hubiera hecho nada.
    */
   hayDatos: boolean
+  /**
+   * Inicio del ciclo en el que la persona respondió "todavía no cobro". Vive
+   * en el navegador y no en la cuenta: es una respuesta del momento, y el
+   * ciclo siguiente vuelve a preguntarse sola.
+   */
+  cicloSinCobrar: string
+  /** Guarda esa respuesta para el ciclo dado. */
+  aplazarCobro: (inicioCiclo: string) => void
   /** Vuelve a traer todo del backend. Útil tras una mutación. */
   refrescar: () => Promise<void>
   /**
@@ -53,6 +61,8 @@ export interface EstadoFinanzas {
   guardarAjustes: (cambios: Partial<Ajustes>) => Promise<void>
 }
 
+const CLAVE_SIN_COBRAR = 'finanzas.cobroAplazado'
+
 const Contexto = createContext<EstadoFinanzas | null>(null)
 
 export function ProveedorFinanzas({ children }: { children: ReactNode }) {
@@ -61,6 +71,16 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
   const [datos, setDatos] = useState<Awaited<ReturnType<typeof cargarTodo>> | null>(null)
   const [periodo, setPeriodo] = useState(periodoActual)
   const [hoy, setHoy] = useState(hoyISO)
+  // Antes esto vivía dentro de la tarjeta "¿Ya cobraste?" y solo la ocultaba.
+  // Al subirlo aquí, la respuesta llega al dominio y cambia las cuentas.
+  const [cicloSinCobrar, setCicloSinCobrar] = useState(
+    () => localStorage.getItem(CLAVE_SIN_COBRAR) ?? '',
+  )
+
+  const aplazarCobro = useCallback((inicioCiclo: string) => {
+    localStorage.setItem(CLAVE_SIN_COBRAR, inicioCiclo)
+    setCicloSinCobrar(inicioCiclo)
+  }, [])
 
   const refrescar = useCallback(async () => {
     try {
@@ -176,7 +196,10 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         pagos,
         metas,
         aportes,
+        cicloSinCobrar,
       },
+      cicloSinCobrar,
+      aplazarCobro,
       hayMovimientos: transacciones.length > 0,
       hayDatos:
         transacciones.length > 0 ||
@@ -188,7 +211,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
       refrescar,
       guardarAjustes,
     }
-  }, [datos, listo, error, periodo, hoy, refrescar, guardarAjustes])
+  }, [datos, listo, error, periodo, hoy, cicloSinCobrar, aplazarCobro, refrescar, guardarAjustes])
 
   return <Contexto value={valor}>{children}</Contexto>
 }

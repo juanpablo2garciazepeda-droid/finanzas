@@ -67,8 +67,11 @@ export function PanelDinero({ margen }: { margen: Margen }) {
     {
       etiqueta: 'Te queda de respaldo',
       valor: respaldo,
-      detalle:
-        margen.margenLibre >= 0
+      // Con el cobro aún sin caer, "te sobran $6,500 de lo que entró" describe
+      // dinero que no ha entrado. Se nombra como lo que es: una proyección.
+      detalle: margen.ingresosEstimados
+        ? `Cuando caiga tu ${margen.ciclo.tipo === 'mensual' ? 'sueldo' : margen.ciclo.nombre} sumarás ${dinero(Math.max(0, margen.margenLibre))} más`
+        : margen.margenLibre >= 0
           ? `Aparte, ${esteCiclo(margen.ciclo.tipo)} te sobran ${dinero(margen.margenLibre)} de lo que entró`
           : `Ojo: ${esteCiclo(margen.ciclo.tipo)} vas ${dinero(-margen.margenLibre)} por encima y sale de aquí`,
       tono: respaldo > 0 ? 'text-verde' : 'text-rojo',

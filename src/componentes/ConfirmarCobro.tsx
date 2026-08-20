@@ -9,8 +9,6 @@ import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
 import { Boton, Tarjeta } from './ui/Basicos'
 
-const CLAVE_APLAZADO = 'finanzas.cobroAplazado'
-
 /**
  * "¿Ya cobraste?".
  *
@@ -19,14 +17,17 @@ const CLAVE_APLAZADO = 'finanzas.cobroAplazado'
  * que quizá todavía no está en la cuenta, y confundirlo con dinero real es
  * exactamente lo que hace que los números "no cuadren". Así que se pregunta, y
  * la respuesta convierte la estimación en un movimiento de verdad.
+ *
+ * Las dos respuestas cuentan. "Sí" registra el ingreso; "todavía no" hace que
+ * el estimado deje de repartirse como si fuera gastable. Antes esa segunda
+ * respuesta solo escondía la tarjeta y las cuentas seguían igual de optimistas,
+ * que era justo lo que la pregunta pretendía evitar.
  */
 export function ConfirmarCobro({ margen }: { margen: Margen }) {
-  const { categoriasActivas, ajustes, hoy, refrescar } = useFinanzas()
+  const { categoriasActivas, ajustes, hoy, refrescar, cicloSinCobrar, aplazarCobro } = useFinanzas()
   const { mostrar } = useAvisos()
   const [guardando, setGuardando] = useState(false)
-  const [aplazado, setAplazado] = useState(
-    () => localStorage.getItem(CLAVE_APLAZADO) === margen.ciclo.inicio,
-  )
+  const aplazado = cicloSinCobrar === margen.ciclo.inicio
 
   // Solo tiene sentido si hay un sueldo configurado y aún no se registró nada.
   const procede = margen.ingresosEstimados && margen.ingresos > 0 && !aplazado
@@ -65,8 +66,7 @@ export function ConfirmarCobro({ margen }: { margen: Margen }) {
   }
 
   function aplazar() {
-    localStorage.setItem(CLAVE_APLAZADO, margen.ciclo.inicio)
-    setAplazado(true)
+    aplazarCobro(margen.ciclo.inicio)
   }
 
   return (

@@ -133,6 +133,11 @@ export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[
       ['Compromiso de deuda', dinero(margen.compromisoDeuda)],
       ['Aporte pendiente a metas', dinero(margen.compromisoMeta)],
       ['Margen libre', dinero(margen.margenLibre)],
+      // Con saldo declarado el margen libre puede ser una proyección; lo que
+      // se puede gastar de verdad es el mínimo contra la cuenta.
+      ...(margen.limitadoPorSaldo
+        ? [['Disponible real (lo limita tu saldo)', dinero(margen.margenDisponible)]]
+        : []),
       ['Deuda total', dinero(deudaTotal(ctx.deudas))],
       ['Ahorro total', dinero(ahorroTotal(ctx.metas))],
       ['Salud financiera', `${salud.puntaje}/100 · ${salud.etiqueta}`],

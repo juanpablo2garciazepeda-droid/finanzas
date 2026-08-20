@@ -202,3 +202,23 @@ describe('los umbrales escalan con el ingreso', () => {
     expect(modesto.some((r) => r.id === 'excedente-meta')).toBe(true)
   })
 })
+
+describe('las recomendaciones no reparten dinero que no está en la cuenta', () => {
+  it('no propone abonar el excedente del ciclo cuando la cuenta no lo respalda', () => {
+    // Flujo del ciclo: $6,500 libres. Cuenta: $27 y una deuda por vencer.
+    // Sugerir "abona tus $6,500 libres" con esa cuenta es un mal consejo.
+    const ctx = contexto({
+      hoy: '2026-08-20',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_900_000,
+        saldoInicial: 2_700,
+        saldoInicialFecha: '2026-08-16',
+      },
+      deudas: [deuda({ id: 'd1', pagoMinimo: 300_000, fechaLimite: '2026-08-25' })],
+    })
+
+    expect(claves(ctx)).not.toContain('excedente-deuda')
+  })
+})

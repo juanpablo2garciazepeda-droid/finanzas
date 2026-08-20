@@ -50,11 +50,11 @@ export function MedidorMargen({
   // En modo general el arco muestra cuánto del flujo del ciclo ya se consumió;
   // en simulación, cuánto se llevaría este gasto.
   const consumido = simulacion
-    ? margen.margenLibre > 0
-      ? Math.min(1, monto / margen.margenLibre)
+    ? margen.margenDisponible > 0
+      ? Math.min(1, monto / margen.margenDisponible)
       : 1
     : margen.flujoDelCiclo > 0
-      ? Math.min(1, 1 - Math.max(0, margen.margenLibre) / margen.flujoDelCiclo)
+      ? Math.min(1, 1 - Math.max(0, margen.margenDisponible) / margen.flujoDelCiclo)
       : 1
 
   // En el tablero la cifra grande es lo que se puede gastar HOY: es la decisión
@@ -67,6 +67,8 @@ export function MedidorMargen({
       ? margen.gastoDiarioSugerido
       : margen.margenLibre
   const nivel = veredicto.nivel
+  // "tu quincena" / "tu semana" / "tu sueldo": nombrar el cobro por su ciclo.
+  const cobro = margen.ciclo.tipo === 'mensual' ? 'sueldo' : margen.ciclo.nombre
   const texto = formatearMoneda(cifra, moneda, locale, { conDecimales: false })
   const dinero = (c: number) => formatearMoneda(c, moneda, locale, { conDecimales: false })
 
@@ -115,7 +117,9 @@ export function MedidorMargen({
           </p>
           <p className="mt-0.5 text-xs text-suave">
             {simulacion
-              ? 'te quedarían libres'
+              ? margen.limitadoPorSaldo
+                ? 'te quedarían en la cuenta'
+                : 'te quedarían libres'
               : porDia
                 ? 'puedes gastar hoy'
                 : `libres ${esteCiclo(margen.ciclo.tipo)}`}
@@ -130,14 +134,16 @@ export function MedidorMargen({
       {/* La aritmética completa, siempre visible. Antes esto vivía en otra
           tarjeta que solo aparecía con saldo declarado: en cuenta nueva la cifra
           grande salía de la nada. */}
-      {porDia && margen.margenLibre > 0 && (
+      {porDia && margen.margenDisponible > 0 && (
         <button
           type="button"
           onClick={() => setDesglose(true)}
           className="mt-1.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-campo px-2 py-1 text-center text-[13px] text-suave transition-colors hover:bg-elevada"
         >
           <span>
-            <span className="cifras font-medium text-tinta">{dinero(margen.margenLibre)}</span>{' '}
+            <span className="cifras font-medium text-tinta">
+              {dinero(margen.margenDisponible)}
+            </span>{' '}
             libres
           </span>
           <span>
@@ -154,18 +160,37 @@ export function MedidorMargen({
         </button>
       )}
 
-      {porDia && margen.margenLibre <= 0 && (
+      {porDia && margen.margenDisponible <= 0 && (
         <button
           type="button"
           onClick={() => setDesglose(true)}
           className="mt-1.5 flex items-center gap-1.5 rounded-campo px-2 py-1 text-center text-[13px] text-suave transition-colors hover:bg-elevada"
         >
+          {/* Cuando el tope lo pone la cuenta y no el ciclo, hay que decirlo
+              con ese nombre: "vas por encima de lo que entró" no describe a
+              quien simplemente todavía no cobra. */}
           <span>
-            Vas{' '}
-            <span className="cifras font-medium text-rojo">
-              {dinero(Math.abs(margen.margenLibre))}
-            </span>{' '}
-            por encima de lo que entró {esteCiclo(margen.ciclo.tipo)}
+            {margen.limitadoPorSaldo ? (
+              <>
+                Tu cuenta trae{' '}
+                <span className="cifras font-medium text-rojo">
+                  {dinero(margen.dineroDisponible ?? 0)}
+                </span>{' '}
+                {margen.cobroPendiente || margen.ingresosEstimados
+                  ? `y tu ${cobro} todavía no cae`
+                  : 'y ya está comprometida'}
+              </>
+            ) : margen.cobroPendiente ? (
+              <>Dijiste que tu {cobro} todavía no cae; esto es lo que hay hasta entonces</>
+            ) : (
+              <>
+                Vas{' '}
+                <span className="cifras font-medium text-rojo">
+                  {dinero(Math.abs(margen.margenDisponible))}
+                </span>{' '}
+                por encima de lo que entró {esteCiclo(margen.ciclo.tipo)}
+              </>
+            )}
           </span>
           <Info className="size-3.5 shrink-0 text-tenue" aria-hidden />
         </button>

@@ -91,7 +91,53 @@ export function DesgloseMargen({
         </span>
       </div>
 
-      {margen.diasRestantes > 0 && margen.margenLibre > 0 && (
+      {/* El tope real. El renglón de arriba es una proyección: cuenta el cobro
+          que todavía no cae. Cuando la cuenta trae menos, manda la cuenta, y la
+          división de abajo tiene que salir de aquí. Enseñar la resta completa es
+          lo que evita que el resultado parezca sacado de la manga. */}
+      {(margen.limitadoPorSaldo || margen.cobroPendiente) && (
+        <>
+          {margen.cobroPendiente && (
+            <div className="flex items-baseline justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[15px] text-suave">Menos el ingreso que aún no cae</p>
+                <p className="mt-0.5 text-[13px] text-tenue">
+                  Dijiste que todavía no cobras, así que no se reparte hasta que llegue.
+                </p>
+              </div>
+              <span className="cifras cifra-md shrink-0 font-medium text-tinta">
+                − {dinero(margen.ingresos)}
+              </span>
+            </div>
+          )}
+          {margen.limitadoPorSaldo && (
+            <div className="flex items-baseline justify-between gap-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[15px] text-suave">Pero en tu cuenta hay</p>
+                <p className="mt-0.5 text-[13px] text-tenue">
+                  Lo que hay hoy de verdad, ya sin lo comprometido.
+                </p>
+              </div>
+              <span className="cifras cifra-md shrink-0 font-medium text-tinta">
+                {dinero(margen.colchonTotal ?? 0)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-baseline justify-between gap-3 border-t-2 border-borde-fuerte py-3">
+            <p className="text-[15px] font-medium text-tinta">Con esto puedes contar</p>
+            <span
+              className={clases(
+                'cifras cifra-lg shrink-0 font-semibold',
+                margen.margenDisponible >= 0 ? 'text-tinta' : 'text-rojo',
+              )}
+            >
+              {dinero(margen.margenDisponible)}
+            </span>
+          </div>
+        </>
+      )}
+
+      {margen.diasRestantes > 0 && margen.margenDisponible > 0 && (
         <>
           <div className="flex items-baseline justify-between gap-3 py-2.5">
             <p className="text-[15px] text-suave">
@@ -111,12 +157,12 @@ export function DesgloseMargen({
         </>
       )}
 
-      {margen.colchonTotal !== null && (
+      {margen.colchonTotal !== null && margen.colchonTotal > 0 && !margen.limitadoPorSaldo && (
         <p className="mt-4 text-[13px] leading-relaxed text-tenue">
           Aparte de esta cuenta tienes{' '}
           <span className="cifras font-medium text-suave">{dinero(margen.colchonTotal)}</span> de
-          respaldo en tu saldo. No se reparte entre los días porque no es dinero de{' '}
-          {ventana.replace('esta ', 'esta ').replace('este ', 'este ')}: es lo que llevas guardado.
+          respaldo en tu saldo. No se reparte entre los días porque no es dinero de {ventana}: es lo
+          que llevas guardado.
         </p>
       )}
     </Modal>
