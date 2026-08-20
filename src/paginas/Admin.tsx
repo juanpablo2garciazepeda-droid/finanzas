@@ -224,7 +224,6 @@ function DetalleAdmin({
   alCambiarRol: (rol: 'usuario' | 'admin') => void
 }) {
   const t = useT()
-  const { mostrar } = useAvisos()
   const u = data.usuario
   const esMiUsuario = u.id === miId
   const totalDatos =

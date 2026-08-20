@@ -308,11 +308,11 @@ export function EditorPerfil({
         >
           <p className="text-sm text-suave">{t('ajustes.foto_actual')}</p>
           <div className="mt-5 flex gap-3">
-            <Boton tipo="button" variante="fantasma" onClick={() => setQuitandoFoto(false)} className="flex-1">
+            <Boton type="button" variante="fantasma" onClick={() => setQuitandoFoto(false)} className="flex-1">
               {t('comun.cancelar')}
             </Boton>
             <Boton
-              tipo="button"
+              type="button"
               variante="peligro"
               onClick={async () => {
                 setQuitandoFoto(false)
@@ -365,11 +365,11 @@ export function EditorPerfil({
         >
           <p className="text-sm text-suave">{t('ajustes.logout_all_mensaje')}</p>
           <div className="mt-5 flex gap-3">
-            <Boton tipo="button" variante="fantasma" onClick={() => setConfirmandoLogoutAll(false)} className="flex-1">
+            <Boton type="button" variante="fantasma" onClick={() => setConfirmandoLogoutAll(false)} className="flex-1">
               {t('comun.cancelar')}
             </Boton>
             <Boton
-              tipo="button"
+              type="button"
               variante="peligro"
               onClick={async () => {
                 setConfirmandoLogoutAll(false)

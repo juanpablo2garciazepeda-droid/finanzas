@@ -258,7 +258,6 @@ const es: Diccionario = {
   'comun.admin': 'Admin',
   // Ajustes · modales
   'ajustes.editar_nombre': 'Editar nombre',
-  'ajustes.editar_perfil': 'Editar perfil',
   'ajustes.editar_perfil_titulo': 'Editar perfil',
   'ajustes.seccion_perfil': 'Perfil',
   'ajustes.seccion_seguridad': 'Seguridad',
@@ -599,7 +598,6 @@ const en: Diccionario = {
   'comun.elegir_fecha': 'Pick a date',
   // Ajustes · modales
   'ajustes.editar_nombre': 'Edit name',
-  'ajustes.editar_perfil': 'Edit profile',
   'ajustes.editar_perfil_titulo': 'Edit profile',
   'ajustes.seccion_perfil': 'Profile',
   'ajustes.seccion_seguridad': 'Security',

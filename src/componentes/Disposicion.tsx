@@ -208,7 +208,6 @@ function BarraLateral({
   const editorPerfil = useEditorPerfil()
   const reducido = useReducedMotion()
   const { pathname } = useLocation()
-  const navegar = useNavigate()
 
   // Si el EditorPerfil está abierto, el sidebar no responde al mouse y se
   // colapsa, para que la atención se vaya al modal sin nada detrás.

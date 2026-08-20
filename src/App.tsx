@@ -1,5 +1,5 @@
 import { HashRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { ProveedorAuth, useAuth } from '@/estado/auth'
 import { ProveedorI18n } from '@/estado/i18n'
 import { Landing } from '@/paginas/Landing'
@@ -102,7 +102,6 @@ function PantallaCargando() {
  */
 function RutasPublicas() {
   const location = useLocation()
-  const reducido = useReducedMotion()
   const transSalida = { duration: 0.06, ease: 'easeIn' as const }
   const transEntrada = { duration: 0.14, ease: 'easeOut' as const }
 
@@ -133,7 +132,6 @@ function Contenido() {
   useAplicarApariencia()
   useRecordatorios()
   const location = useLocation()
-  const reducido = useReducedMotion()
 
   // Animación de página: solo opacidad, sin movimiento vertical. Sin
   // resorte (no hay física que valga la pena en un fade puro): tween corto

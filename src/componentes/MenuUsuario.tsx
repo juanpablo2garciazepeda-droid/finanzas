@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Bell,
   Globe,
+  type LucideIcon,
   LogOut,
   Moon,
   Pencil,
@@ -201,7 +202,7 @@ function Item({
   alClick,
   peligro,
 }: {
-  icono: React.ComponentType<{ className?: string }>
+  icono: LucideIcon
   etiqueta: string
   valor?: string
   alClick: () => void
