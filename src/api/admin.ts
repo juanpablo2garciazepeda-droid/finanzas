@@ -35,10 +35,17 @@ export interface AdminDetalleUsuario {
   conteos: AdminConteos
 }
 
+export interface AdminLoteResultado {
+  eliminados: string[]
+  omitidos: Array<{ id: string; razon: string }>
+}
+
 export const adminApi = {
   listar: () => api.get<AdminUsuario[]>('/admin/usuarios'),
   detalle: (id: string) => api.get<AdminDetalleUsuario>(`/admin/usuarios/${id}`),
   eliminar: (id: string) => api.delete<{ ok: true }>(`/admin/usuarios/${id}`),
+  eliminarLote: (ids: string[]) =>
+    api.post<AdminLoteResultado>('/admin/usuarios/eliminar-lote', { ids }),
   forzarReset: (id: string) =>
     api.post<{ mensaje: string }>(`/admin/usuarios/${id}/forzar-reset`, {}),
   cambiarRol: (id: string, rol: 'usuario' | 'admin') =>

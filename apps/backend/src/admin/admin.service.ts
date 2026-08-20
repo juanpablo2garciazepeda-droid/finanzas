@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { Request } from 'express';
 import { User } from '../users/user.entity';
@@ -41,6 +41,7 @@ export class AdminService {
     private readonly users: UsersService,
     private readonly email: EmailService,
     private readonly auditoria: AuditoriaService,
+    private readonly dataSource: DataSource,
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
     @InjectRepository(Transaccion)
@@ -176,6 +177,91 @@ export class AdminService {
       detalles: { usuarioEliminadoId: id, email: u.email },
       ip: this.ip(request),
     })
+  }
+
+  /**
+   * Borrado en lote: hace todo en una sola transacción para que o se borran
+   * todos los elegibles o no se borra ninguno. Devuelve la lista de
+   * eliminados y la de omitidos con su razón, así el front puede mostrar
+   * feedback por id sin asumir nada del estado del servidor.
+   *
+   * Reglas de seguridad:
+   *  - El admin que ejecuta la acción no puede estar en la lista.
+   *  - No se puede dejar el sistema sin admins: si tras el borrado no queda
+   *    ninguno, se cancela el lote entero.
+   *  - Ids inexistentes o duplicados se reportan como omitidos, no fallan.
+   */
+  async eliminarUsuariosLote(
+    ids: string[],
+    adminId: string,
+    request?: Request,
+  ): Promise<{
+    eliminados: string[]
+    omitidos: Array<{ id: string; razon: string }>
+  }> {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('La lista de ids está vacía.')
+    }
+    // Dedupe preservando orden.
+    const unicos = Array.from(new Set(ids))
+
+    // Trae los usuarios que sí existen; los ids faltantes se reportan abajo.
+    const encontrados = await this.usersRepo.find({
+      where: unicos.map((id) => ({ id })),
+    })
+    const porId = new Map(encontrados.map((u) => [u.id, u]))
+    const omitidos: Array<{ id: string; razon: string }> = []
+
+    for (const id of unicos) {
+      if (!porId.has(id)) {
+        omitidos.push({ id, razon: 'No existe.' })
+      } else if (id === adminId) {
+        omitidos.push({ id, razon: 'No puedes borrarte a ti mismo.' })
+      }
+    }
+    const elegibles = unicos.filter((id) => porId.has(id) && id !== adminId)
+
+    // Regla "no dejar el sistema sin admins": si entre los elegibles hay
+    // admins y la cuenta actual de admins menos los admins a borrar es 0,
+    // se aborta el lote.
+    const adminsAEliminar = elegibles.filter((id) => porId.get(id)!.rol === 'admin')
+    const totalAdmins = await this.usersRepo.count({ where: { rol: 'admin' } })
+    if (adminsAEliminar.length > 0 && totalAdmins - adminsAEliminar.length < 1) {
+      throw new BadRequestException(
+        'No puedes borrar a los últimos administradores del sistema.',
+      )
+    }
+
+    if (elegibles.length === 0) {
+      return { eliminados: [], omitidos }
+    }
+
+    // Una sola transacción: o se borran todos o ninguno.
+    const emailsEliminados: Array<{ id: string; email: string }> = []
+    await this.dataSource.transaction(async (manager) => {
+      for (const id of elegibles) {
+        const u = porId.get(id)!
+        // ON DELETE CASCADE se lleva categorías, transacciones, deudas, metas.
+        await manager.delete(User, { id })
+        emailsEliminados.push({ id, email: u.email })
+      }
+    })
+
+    // Auditoría: una entrada por borrado, con el lote como contexto.
+    for (const { id, email } of emailsEliminados) {
+      void this.auditoria.registrar({
+        usuarioId: adminId,
+        emailIntento: email,
+        accion: 'admin_eliminar_usuario',
+        detalles: { usuarioEliminadoId: id, email, lote: true, totalLote: elegibles.length },
+        ip: this.ip(request),
+      })
+    }
+
+    return {
+      eliminados: elegibles,
+      omitidos,
+    }
   }
 
   /**

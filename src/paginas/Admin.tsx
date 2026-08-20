@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Trash2, KeyRound, Shield, User as UserIcon, ChevronRight } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Trash2, KeyRound, Shield, User as UserIcon, ChevronRight, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/estado/auth'
 import { useT } from '@/estado/i18n'
@@ -17,9 +17,9 @@ import { Modal, ConfirmarBorrado } from '@/componentes/ui/Modal'
  * Panel de administración (solo `rol: 'admin'`).
  *
  * Lista todos los usuarios, permite ver el detalle con conteos, forzar
- * reset de contraseña y borrar usuarios. Cada acción destructiva pide
- * confirmación. Los conteos son solo de metadata — el admin NO entra a los
- * datos privados de los usuarios.
+ * reset de contraseña y borrar usuarios — uno por uno o en lote. Cada
+ * acción destructiva pide confirmación. Los conteos son solo de metadata:
+ * el admin NO entra a los datos privados de los usuarios.
  */
 export function Admin() {
   const { usuario } = useAuth()
@@ -30,6 +30,9 @@ export function Admin() {
   const [cargando, setCargando] = useState(true)
   const [detalleAbierto, setDetalleAbierto] = useState<AdminDetalleUsuario | null>(null)
   const [confirmandoEliminar, setConfirmandoEliminar] = useState<AdminUsuario | null>(null)
+  const [confirmandoLote, setConfirmandoLote] = useState(false)
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set())
+  const [eliminandoLote, setEliminandoLote] = useState(false)
 
   // Si no es admin, lo mandamos al tablero. (La ruta también se valida en
   // backend: el guard devuelve 403.)
@@ -40,7 +43,17 @@ export function Admin() {
   const cargar = async () => {
     setCargando(true)
     const r = await adminApi.listar()
-    if (r.ok && r.data) setUsuarios(r.data)
+    if (r.ok && r.data) {
+      setUsuarios(r.data)
+      // Limpia la selección de ids que ya no existen (por si alguien fue
+      // borrado en otra pestaña o por un proceso externo).
+      setSeleccionados((prev) => {
+        const ids = new Set(r.data!.map((u) => u.id))
+        const siguiente = new Set<string>()
+        for (const id of prev) if (ids.has(id)) siguiente.add(id)
+        return siguiente
+      })
+    }
     setCargando(false)
   }
 
@@ -59,9 +72,44 @@ export function Admin() {
     if (r.ok) {
       mostrar(t('admin.usuario_eliminado', { email: u.email }))
       setConfirmandoEliminar(null)
+      // Quita el id de la selección si estaba.
+      setSeleccionados((prev) => {
+        const siguiente = new Set(prev)
+        siguiente.delete(u.id)
+        return siguiente
+      })
       void cargar()
     } else {
       mostrar(r.error ?? t('admin.error_eliminar'), 'error')
+    }
+  }
+
+  const onEliminarLote = async () => {
+    const ids = Array.from(seleccionados)
+    if (ids.length === 0) return
+    setEliminandoLote(true)
+    const r = await adminApi.eliminarLote(ids)
+    setEliminandoLote(false)
+    setConfirmandoLote(false)
+    if (r.ok && r.data) {
+      const { eliminados, omitidos } = r.data
+      if (eliminados.length > 0) {
+        mostrar(t('admin.lote_eliminados', { n: eliminados.length }))
+      }
+      if (omitidos.length > 0) {
+        // Avisa por cada omitido: el admin necesita saber por qué un id que
+        // seleccionó no se borró.
+        for (const o of omitidos) {
+          mostrar(t('admin.lote_omitido', { id: o.id, razon: o.razon }), 'error')
+        }
+      }
+      // Limpia la selección: los eliminados ya no existen; los omitidos
+      // tampoco conviene mantenerlos (si el admin vuelve a intentar, el
+      // backend va a rechazarlos por la misma razón).
+      setSeleccionados(new Set())
+      void cargar()
+    } else {
+      mostrar(r.error ?? t('admin.error_eliminar_lote'), 'error')
     }
   }
 
@@ -85,6 +133,29 @@ export function Admin() {
     }
   }
 
+  // Las filas elegibles para selección: nunca el admin actual.
+  const idsElegibles = useMemo(
+    () => usuarios.filter((u) => u.id !== usuario?.id).map((u) => u.id),
+    [usuarios, usuario?.id],
+  )
+  const todosSeleccionados =
+    idsElegibles.length > 0 && idsElegibles.every((id) => seleccionados.has(id))
+  const alternarTodos = () => {
+    if (todosSeleccionados) {
+      setSeleccionados(new Set())
+    } else {
+      setSeleccionados(new Set(idsElegibles))
+    }
+  }
+  const alternar = (id: string) => {
+    setSeleccionados((prev) => {
+      const siguiente = new Set(prev)
+      if (siguiente.has(id)) siguiente.delete(id)
+      else siguiente.add(id)
+      return siguiente
+    })
+  }
+
   return (
     <div className="space-y-6">
       <section>
@@ -102,69 +173,111 @@ export function Admin() {
         </Tarjeta>
       ) : (
         <Tarjeta className="divide-y divide-borde p-0">
-          {usuarios.map((u) => (
-            <div key={u.id} className="flex items-center gap-3 px-4 py-3">
-              <Avatar
-                nombre={u.displayName || u.email}
-                foto={u.fotoUrl}
-                tamano="sm"
+          {/* Header de selección múltiple. Siempre visible para que el admin
+              sepa que puede elegir varios desde el inicio. */}
+          {idsElegibles.length > 0 && (
+            <div className="flex items-center gap-3 border-b border-borde bg-elevada/40 px-4 py-2">
+              <input
+                type="checkbox"
+                checked={todosSeleccionados}
+                onChange={alternarTodos}
+                aria-label={t('admin.seleccionar_todo')}
+                className="size-4 shrink-0 cursor-pointer accent-acento"
               />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-medium text-tinta">
-                    {u.displayName || u.email}
-                  </p>
-                  {u.rol === 'admin' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-acento/10 px-1.5 py-0.5 text-[11px] font-medium text-acento">
-                      <Shield className="size-2.5" aria-hidden />
-                      {t('comun.admin')}
-                    </span>
-                  )}
-                  {u.id === usuario?.id && (
-                    <span className="rounded-full bg-elevada px-1.5 py-0.5 text-[11px] text-tenue">
-                      {t('admin.tu')}
-                    </span>
-                  )}
-                </div>
-                <p className="truncate text-xs text-tenue">{u.email}</p>
-                <p className="mt-0.5 text-[11px] text-suave">
-                  {t('admin.creado_en')} {new Date(u.creadoEn).toLocaleDateString()}
-                </p>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1">
-                <Boton
-                  variante="secundario"
-                  onClick={() => onForzarReset(u)}
-                  className="px-2.5 py-1.5 text-[12px]"
-                  aria-label={t('admin.forzar_reset')}
-                  title={t('admin.forzar_reset')}
-                  disabled={u.id === usuario?.id}
-                >
-                  <KeyRound className="size-3.5" aria-hidden />
-                </Boton>
-                <button
-                  type="button"
-                  onClick={() => setConfirmandoEliminar(u)}
-                  disabled={u.id === usuario?.id}
-                  className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-rojo/10 hover:text-rojo disabled:cursor-not-allowed disabled:opacity-30"
-                  aria-label={t('admin.eliminar')}
-                  title={t('admin.eliminar')}
-                >
-                  <Trash2 className="size-3.5" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void verDetalle(u.id)}
-                  className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
-                  aria-label={t('admin.ver_detalle')}
-                  title={t('admin.ver_detalle')}
-                >
-                  <ChevronRight className="size-4" aria-hidden />
-                </button>
-              </div>
+              <span className="text-[13px] text-suave">
+                {seleccionados.size > 0
+                  ? t('admin.n_seleccionados', { n: seleccionados.size })
+                  : t('admin.seleccionar_varios')}
+              </span>
             </div>
-          ))}
+          )}
+
+          {usuarios.map((u) => {
+            const esMiUsuario = u.id === usuario?.id
+            const estaSeleccionado = !esMiUsuario && seleccionados.has(u.id)
+            return (
+              <div
+                key={u.id}
+                className={clases(
+                  'flex items-center gap-3 px-4 py-3 transition-colors',
+                  estaSeleccionado && 'bg-acento/5',
+                )}
+              >
+                {/* El checkbox se oculta para el propio admin: nunca se
+                    puede seleccionar a sí mismo. */}
+                {esMiUsuario ? (
+                  <span className="size-4 shrink-0" aria-hidden />
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={estaSeleccionado}
+                    onChange={() => alternar(u.id)}
+                    aria-label={t('admin.seleccionar_usuario', { email: u.email })}
+                    className="size-4 shrink-0 cursor-pointer accent-acento"
+                  />
+                )}
+                <Avatar
+                  nombre={u.displayName || u.email}
+                  foto={u.fotoUrl}
+                  tamano="sm"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-tinta">
+                      {u.displayName || u.email}
+                    </p>
+                    {u.rol === 'admin' && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-acento/10 px-1.5 py-0.5 text-[11px] font-medium text-acento">
+                        <Shield className="size-2.5" aria-hidden />
+                        {t('comun.admin')}
+                      </span>
+                    )}
+                    {u.id === usuario?.id && (
+                      <span className="rounded-full bg-elevada px-1.5 py-0.5 text-[11px] text-tenue">
+                        {t('admin.tu')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-tenue">{u.email}</p>
+                  <p className="mt-0.5 text-[11px] text-suave">
+                    {t('admin.creado_en')} {new Date(u.creadoEn).toLocaleDateString()}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  <Boton
+                    variante="secundario"
+                    onClick={() => onForzarReset(u)}
+                    className="px-2.5 py-1.5 text-[12px]"
+                    aria-label={t('admin.forzar_reset')}
+                    title={t('admin.forzar_reset')}
+                    disabled={esMiUsuario}
+                  >
+                    <KeyRound className="size-3.5" aria-hidden />
+                  </Boton>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoEliminar(u)}
+                    disabled={esMiUsuario}
+                    className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-rojo/10 hover:text-rojo disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label={t('admin.eliminar')}
+                    title={t('admin.eliminar')}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void verDetalle(u.id)}
+                    className="rounded-lg p-1.5 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+                    aria-label={t('admin.ver_detalle')}
+                    title={t('admin.ver_detalle')}
+                  >
+                    <ChevronRight className="size-4" aria-hidden />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </Tarjeta>
       )}
 
@@ -208,7 +321,108 @@ export function Admin() {
         mensaje={t('admin.eliminar_mensaje', { email: confirmandoEliminar?.email ?? '' })}
         textoBoton={t('admin.eliminar_boton')}
       />
+
+      {/* Confirmación del borrado en lote: el admin revisa cuántos va a
+          borrar antes de ejecutar, y la lista de emails para que no borre
+          a quien no debe por error. */}
+      <ConfirmarBorradoLote
+        abierto={confirmandoLote}
+        cargando={eliminandoLote}
+        total={seleccionados.size}
+        emails={usuarios.filter((u) => seleccionados.has(u.id)).map((u) => u.email)}
+        onCerrar={() => setConfirmandoLote(false)}
+        onConfirmar={() => void onEliminarLote()}
+      />
+
+      {/* Barra flotante de selección: aparece cuando hay al menos un
+          usuario seleccionado. Persistente mientras la selección esté
+          abierta, para que el admin no tenga que ir a buscarla. */}
+      {seleccionados.size > 0 && (
+        <div
+          role="region"
+          aria-label={t('admin.seleccion_activa')}
+          className="fixed bottom-24 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-borde bg-superficie/95 px-4 py-2 shadow-flotante backdrop-blur lg:bottom-8"
+        >
+          <span className="text-[13px] font-medium text-tinta">
+            {t('admin.n_seleccionados', { n: seleccionados.size })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSeleccionados(new Set())}
+            className="rounded-full p-1 text-tenue transition-colors hover:bg-elevada hover:text-tinta"
+            aria-label={t('admin.limpiar_seleccion')}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+          <Boton
+            variante="peligro"
+            onClick={() => setConfirmandoLote(true)}
+            className="text-[13px]"
+          >
+            <Trash2 className="size-3.5" aria-hidden />
+            {t('admin.eliminar_n', { n: seleccionados.size })}
+          </Boton>
+        </div>
+      )}
     </div>
+  )
+}
+
+/**
+ * Modal de confirmación específico para borrado en lote. Muestra el conteo
+ * y los emails que se van a borrar: el admin no debería ver un "estás
+ * borrando 12 usuarios" sin saber cuáles.
+ */
+function ConfirmarBorradoLote({
+  abierto,
+  cargando,
+  total,
+  emails,
+  onCerrar,
+  onConfirmar,
+}: {
+  abierto: boolean
+  cargando: boolean
+  total: number
+  emails: string[]
+  onCerrar: () => void
+  onConfirmar: () => void
+}) {
+  const t = useT()
+  return (
+    <Modal
+      abierto={abierto}
+      onCerrar={onCerrar}
+      titulo={t('admin.eliminar_lote_titulo', { n: total })}
+      ancho="sm:max-w-md"
+    >
+      <p className="text-sm text-suave">{t('admin.eliminar_lote_aviso')}</p>
+      <ul className="mt-4 max-h-48 space-y-1 overflow-y-auto rounded-campo bg-elevada p-3 text-[13px] text-tinta">
+        {emails.map((email) => (
+          <li key={email} className="truncate">
+            {email}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-6 flex gap-3">
+        <button
+          type="button"
+          onClick={onCerrar}
+          disabled={cargando}
+          className="flex-1 rounded-xl border border-borde bg-elevada px-4 py-2.5 text-sm font-medium text-tinta transition-colors hover:border-borde-fuerte disabled:opacity-50"
+        >
+          {t('comun.cancelar')}
+        </button>
+        <button
+          type="button"
+          onClick={onConfirmar}
+          disabled={cargando || total === 0}
+          className="flex-1 rounded-xl border border-rojo/30 bg-rojo/15 px-4 py-2.5 text-sm font-medium text-rojo transition-colors hover:bg-rojo/25 disabled:opacity-50"
+        >
+          {cargando ? t('comun.eliminando') : t('admin.eliminar_n', { n: total })}
+        </button>
+      </div>
+    </Modal>
   )
 }
 

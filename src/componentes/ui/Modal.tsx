@@ -57,7 +57,6 @@ export function Modal({
     // cerrar se restaura el scroll exacto de antes, sin saltos.
     const scrollY = window.scrollY
     const cuerpo = document.body.style
-    const previo = { position: cuerpo.position, top: cuerpo.top, left: cuerpo.left, right: cuerpo.right }
     cuerpo.position = 'fixed'
     cuerpo.top = `-${scrollY}px`
     cuerpo.left = '0'
@@ -71,10 +70,15 @@ export function Modal({
 
     return () => {
       document.removeEventListener('keydown', alPresionar)
-      cuerpo.position = previo.position
-      cuerpo.top = previo.top
-      cuerpo.left = previo.left
-      cuerpo.right = previo.right
+      // Restaurar como cadena vacía (no con el valor previo): si por algún
+      // motivo ya estaba `fixed` antes (otro modal que no limpió bien,
+      // HMR, error de render), restaurar el mismo estado sucio dejaría la
+      // página "corriendo hacia abajo" y la siguiente ruta se vería
+      // desplazada. Vacío siempre deja el body como debería estar.
+      cuerpo.position = ''
+      cuerpo.top = ''
+      cuerpo.left = ''
+      cuerpo.right = ''
       window.scrollTo(0, scrollY)
     }
   }, [abierto])

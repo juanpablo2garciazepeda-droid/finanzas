@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { AdminService } from './admin.service';
 import { RolesGuard } from '../common/roles.guard';
@@ -21,7 +22,13 @@ import { JwtPayload } from '../auth/auth.service';
  * Endpoints exclusivos para usuarios con `rol: 'admin'`. Todos requieren
  * sesión válida (JwtAuthGuard) Y rol admin (RolesGuard). Si el JWT no tiene
  * `rol: 'admin'`, RolesGuard lanza 403.
+ *
+ * Las operaciones de admin son por naturaleza batch: un admin limpiando
+ * cuentas de smoke tests o de spam no puede pararse cada 100 req. Por eso
+ * el controller entero se salta el throttler — el riesgo de abuso es bajo
+ * porque ya pasó por la barrera del rol admin.
  */
+@SkipThrottle({ default: true })
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('admin')
@@ -49,6 +56,24 @@ export class AdminController {
   ): Promise<{ ok: true }> {
     await this.admin.eliminarUsuario(id, admin.sub, request)
     return { ok: true }
+  }
+
+  /**
+   * Borra varios usuarios en una sola transacción. Devuelve el resultado por
+   * id: el front puede mostrar qué falló (no incluir al propio admin, ids
+   * inexistentes, sistema sin admins restantes) sin tener que reconciliar
+   * estado entre la lista y el servidor.
+   */
+  @Post('usuarios/eliminar-lote')
+  async eliminarLote(
+    @Body() body: { ids: string[] },
+    @CurrentUser() admin: JwtPayload,
+    @Req() request: Request,
+  ): Promise<{
+    eliminados: string[]
+    omitidos: Array<{ id: string; razon: string }>
+  }> {
+    return this.admin.eliminarUsuariosLote(body.ids, admin.sub, request)
   }
 
   /**
