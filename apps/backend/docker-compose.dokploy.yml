@@ -31,6 +31,12 @@ services:
       DATABASE_USER: ${DATABASE_USER:?DATABASE_USER is required}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
       DATABASE_NAME: ${DATABASE_NAME:-finanzas}
+      # Activa el runner de migraciones SQL (src/migraciones.ts) en cada
+      # arranque. Es idempotente: registra las aplicadas en
+      # `public.schema_migrations` y solo corre las nuevas. Sin esto, un
+      # push que toque columnas/tablas cae la app hasta que alguien corra
+      # el SQL a mano (ya no tenemos acceso al contenedor de Postgres).
+      MIGRACIONES_AUTOMATICAS: ${MIGRACIONES_AUTOMATICAS:-true}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://finanzasgz.com.mx}

@@ -22,6 +22,12 @@ COPY src ./src
 RUN npm run build \
   && npm prune --omit=dev
 
+# Las migraciones SQL se copian al lado de `dist/` para que el runner las
+# encuentre en `/app/sql/migracion-*.sql` (la resolución es `../sql` desde
+# `dist/`, ver `src/migraciones.ts`). Sin este COPY el runner ve el directorio
+# vacío, registra la advertencia y deja la base como estaba.
+COPY sql ./sql
+
 # Creamos un usuario no root por buenas prácticas.
 RUN addgroup --system app && adduser --system --ingroup app app
 

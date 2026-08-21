@@ -2,8 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { runMigrations } from './migraciones';
 
 async function bootstrap() {
+  // Las migraciones SQL se aplican ANTES de que NestJS abra el puerto. Si
+  // una falla, esta promesa rechaza y el contenedor sale con error, así que
+  // Dokploy lo marca como fallido en lugar de servir una app que va a
+  // explotar en el primer SELECT contra una columna que aún no existe.
+  await runMigrations();
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Confiamos en X-Forwarded-For de Traefik para que el throttler y
