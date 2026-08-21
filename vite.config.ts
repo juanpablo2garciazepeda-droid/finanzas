@@ -13,6 +13,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // El backend no monta su propio runner: sus piezas puras —la aritmética
+    // de calendario de los recordatorios— se prueban desde aquí. Los archivos
+    // con decoradores de Nest no se importan nunca desde una prueba.
+    include: ['src/**/*.test.ts', 'apps/backend/src/**/*.test.ts'],
   },
 })

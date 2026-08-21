@@ -8,6 +8,7 @@ import { Meta } from '../metas/meta.entity';
 import { PagoDeuda } from '../deudas/pago-deuda.entity';
 import { Presupuesto } from '../presupuestos/presupuesto.entity';
 import { Transaccion } from '../transacciones/transaccion.entity';
+import { GastoRecurrente } from '../recurrentes/gasto-recurrente.entity';
 import { InicioController } from './inicio.controller';
 
 /**
@@ -30,6 +31,7 @@ import { InicioController } from './inicio.controller';
       PagoDeuda,
       Meta,
       AporteMeta,
+      GastoRecurrente,
     ]),
   ],
   controllers: [InicioController],

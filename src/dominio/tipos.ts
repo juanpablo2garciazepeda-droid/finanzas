@@ -147,6 +147,13 @@ export interface Ajustes {
   /** Fracción del límite a partir de la cual el semáforo pasa a ámbar. */
   umbralPrecaucion: number
   notificacionesActivas: boolean
+  /**
+   * Avisos de vencimiento por correo. Es otra cosa que
+   * `notificacionesActivas`: aquella es el permiso del navegador y solo se
+   * dispara con la app abierta; el correo llega aunque lleve una semana
+   * cerrada, que es justo cuando el recordatorio sirve de algo.
+   */
+  avisosCorreoVencimientos: boolean
   ultimaRevisionVencimientos: string
 }
 

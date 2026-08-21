@@ -87,6 +87,17 @@ describe('siguienteOcurrencia', () => {
   it('avanza los semanales de siete en siete', () => {
     expect(siguienteOcurrencia('2026-08-01', 'semanal', '2026-08-13')).toBe('2026-08-15')
   })
+
+  it('un pago del 31 no se corre solo por los meses cortos', () => {
+    // Sumando un mes sobre el resultado anterior, el 31 de enero se
+    // convierte en el 3 de marzo (febrero no tiene 31 y la fecha desborda) y
+    // a partir de ahí la fecha de corte se va corriendo para siempre. Los
+    // meses se cuentan desde la fecha original y el día se acota al último
+    // que exista, que es lo que hace el banco.
+    expect(siguienteOcurrencia('2026-01-31', 'mensual', '2026-02-10')).toBe('2026-02-28')
+    expect(siguienteOcurrencia('2026-01-31', 'mensual', '2026-03-10')).toBe('2026-03-31')
+    expect(siguienteOcurrencia('2026-01-31', 'mensual', '2026-04-10')).toBe('2026-04-30')
+  })
 })
 
 describe('enDias', () => {

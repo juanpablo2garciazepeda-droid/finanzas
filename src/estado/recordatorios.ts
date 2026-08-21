@@ -37,7 +37,7 @@ export function useRecordatorios() {
     if (vencimientos.length === 0) return
 
     const primero = vencimientos[0]
-    const monto = formatearMoneda(primero.monto, ajustes.moneda, ajustes.locale, { conDecimales: false })
+    const monto = formatearMoneda(primero.monto, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
     const cuerpo =
       vencimientos.length === 1
         ? `${monto} a ${primero.deuda.acreedor} ${fechaRelativa(hoy, primero.fecha)}.`

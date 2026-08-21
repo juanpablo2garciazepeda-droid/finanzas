@@ -14,7 +14,7 @@ pueden exportar y borrar enteros desde Ajustes.
 ```bash
 pnpm install
 pnpm dev         # http://localhost:5173
-pnpm test        # 166 pruebas del dominio
+pnpm test        # 223 pruebas (dominio + aritmética de los recordatorios)
 pnpm build       # bundle de producción en dist/
 ```
 
@@ -49,18 +49,30 @@ ajustes. La cuenta arranca vacía de movimientos a propósito.
 
 ## La idea
 
-Un balance de fin de mes no sirve para decidir en la caja del súper. Lo que sirve es el
-**margen libre**:
+Un balance de fin de mes no sirve para decidir en la caja del súper. Y una sola cifra
+tampoco: hay **tres restricciones distintas** y la respuesta honesta es la más apretada de
+las tres.
 
 ```
-margen libre = (ingresos del ciclo, o la parte de tu sueldo que le toca)
-             − egresos del ciclo
-             − pagos de deuda que vencen antes de que cierre
-             − la parte del aporte a metas que toca a este ciclo
+CAJA          efectivo hoy
+              ← no puedes gastar lo que no está en la cuenta
+
+COMPROMISOS   caja + por entrar − comprometido
+              ← ni lo que ya tiene dueño antes de que cierre el ciclo
+
+FLUJO         ingresos del ciclo − egresos − comprometido
+              ← ni el ahorro de meses pasados, repartido entre los días
+                que quedan de la quincena
+
+disponible = min(caja, compromisos, flujo)
 ```
 
-Y de ahí sale la cifra que preside el tablero: **cuánto puedes gastar hoy**, que es
-`margen libre ÷ días que faltan para tu próximo corte`.
+`comprometido` son los pagos de deuda que vencen antes del cierre, los gastos fijos que
+todavía no se cobran y la parte del aporte a metas que le toca al ciclo.
+
+De ahí sale la cifra que preside el tablero: **cuánto puedes gastar hoy**, que es
+`disponible ÷ días que faltan para tu próximo corte`. El tablero además dice **cuál** de
+los tres topes ganó, porque las tres situaciones se arreglan de forma distinta.
 
 El semáforo evalúa el gasto candidato contra ese margen y contra el presupuesto de su
 categoría, y devuelve verde / ámbar / rojo **con las razones concretas**: un rojo sin
@@ -80,10 +92,11 @@ src/
     presupuestos.ts   Gasto contra límite, comparativa mes a mes
     deudas.ts         Amortización, vencimientos, método avalancha
     metas.ts          Proyección de llegada y aporte necesario
+    recurrentes.ts    Gastos fijos e ingresos con plantilla, devengados
     alertas.ts        El semáforo y el cálculo del margen  ← el corazón
     salud.ts          Puntaje 0-100 y series históricas
-    recomendaciones.ts  Reglas que producen consejos accionables
-    *.test.ts         166 pruebas sobre todo lo anterior
+    recomendaciones.ts  Razones financieras y consejos accionables
+    *.test.ts         223 pruebas sobre todo lo anterior
 
   api/            Cliente HTTP y manejo del JWT.
     cliente.ts        fetch tipado; limpia el token en cualquier 401
@@ -162,6 +175,34 @@ parte del dinero real; sin él solo se puede razonar sobre flujos, que es útil 
 "¿cuánto tengo?". Los aportes a metas salen del saldo a propósito: ese dinero se apartó y dejó de
 ser gastable.
 
+**Caja, flujo y compromisos son tres cosas y no se restan entre sí.** Restar los
+compromisos del efectivo y llamar al resultado "lo que te queda en la cuenta" produce
+cifras que nadie reconoce: con $27 en el banco y un pago de $5,173 por vencer, un gasto de
+$200 anunciaba "-$5,346 te quedarían en la cuenta" y "te faltan $5,346". Faltaban $173 —lo
+que el gasto excede la caja— y los otros $5,173 eran un pago que la quincena iba a cubrir.
+Ahora la caja es la caja, los compromisos van en su propio renglón, el cobro que falta
+aparece con su monto y su fecha, y lo gastable es el mínimo de los tres topes. `Margen.tope`
+dice cuál mandó, y de ahí salen tres explicaciones distintas en vez de una genérica.
+
+**Un pago que vence después del cierre no se resta del ciclo en curso.** Lo cubre el cobro
+siguiente, no el dinero de hoy. Antes la ventana de compromiso era
+`max(días que quedan, días de aviso)`, así que un pago a siete días hundía el margen de una
+quincena que cerraba en dos. Sigue avisándose —`comprometidoDespues`— pero como contexto.
+
+**Los gastos fijos se devengan, no se esperan.** La renta del día 20 ya está contratada el
+día 1: es una salida segura y cuenta como compromiso desde que empieza el ciclo. Verla solo
+cuando el backend genera el movimiento hacía que el margen se viera holgado el día 1 y se
+desplomara el día 20 sin que hubiera pasado nada nuevo. Lo mismo del otro lado: un sueldo
+con plantilla recurrente dice cuánto entra **y qué día**, que es mejor dato que cualquier
+promedio histórico.
+
+**Los centavos se muestran cuando existen y se callan cuando no.** Declarar $3.50 de saldo
+y leer "$4" en el tablero hace que la app parezca no estar escuchando; y "$1,830.00" debajo
+de "$1,830" se ve como dos cuentas distintas. `formatearMoneda` acepta
+`conDecimales: 'auto'` y ese es el modo de toda cifra que responda a "¿cuánto tengo?". El
+parseo también es exacto: `aCentavos` opera sobre los dígitos del texto, porque
+`Math.round(3.545 * 100)` depende de cómo cayó el binario.
+
 **El dinero estimado nunca se muestra como dinero real.** Mientras no haya un ingreso registrado
 en el ciclo, el margen se calcula con una estimación del sueldo: eso mantiene la app útil el día 1.
 Pero la tarjeta dice "estimados, aún sin registrar" en vez de "entraron", y el tablero pregunta
@@ -220,9 +261,12 @@ consultas no mide nada.
 
 ## Límites conocidos
 
-- **Los recordatorios no son push reales.** Sin servidor, la notificación de un pago próximo se
-  dispara la primera vez que abres la app cada día, no a una hora fija. La pantalla de Ajustes
-  lo dice con estas mismas palabras.
+- **Los recordatorios del navegador no son push reales.** La notificación de un pago próximo
+  se dispara la primera vez que abres la app cada día, no a una hora fija. Por eso existe
+  además el aviso por correo, que sale de un cron del backend y llega aunque la app lleve una
+  semana cerrada: tres correos por vencimiento —al entrar en la ventana de aviso, el día que
+  vence y si se pasó— y ni uno más. Un resumen diario con los mismos pagos entrena a la gente
+  a archivarlo sin leerlo, y entonces el aviso que sí importaba también se archiva.
 - **El interés de las deudas no se acumula solo.** El saldo es `monto original − pagos`. La
   proyección sí simula intereses mes a mes, pero si tu banco capitaliza, actualiza el monto a
   mano.
@@ -249,7 +293,13 @@ consultas no mide nada.
 - **Los montos viajan como cadenas de dígitos.** Son `bigint` en Postgres y JSON no tiene
   enteros de 64 bits.
 - **Las migraciones son archivos sueltos en `sql/`, aditivos y repetibles.** Se aplican en
-  orden por fecha y usan `IF NOT EXISTS`; correr una dos veces no rompe nada.
+  orden por fecha y usan `IF NOT EXISTS`; correr una dos veces no rompe nada. La última,
+  `migracion-2026-08-21-avisos-vencimiento.sql`, agrega el opt-out de los avisos por correo y
+  las dos columnas que evitan repetir el mismo aviso todos los días.
+- **`RecordatoriosModule` no expone endpoints.** Su única entrada es el reloj: un `@Cron`
+  diario a las 8:00 de la hora del contenedor. La aritmética de calendario vive aparte, en
+  `recordatorios/hitos.ts`, sin decoradores de Nest, para poder probarla desde el runner del
+  frontend sin montar un segundo.
 
 ## Despliegue (Dokploy)
 

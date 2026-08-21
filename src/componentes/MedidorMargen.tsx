@@ -61,16 +61,25 @@ export function MedidorMargen({
   // que se toma varias veces al día. Lo que queda del ciclo va debajo, como
   // contexto. En simulación manda el margen que sobraría tras el gasto.
   const porDia = !simulacion && margen.diasRestantes > 0
+  // En simulación, cuando el techo lo pone la caja, la cifra ES el saldo que
+  // queda en la cuenta y la etiqueta puede decirlo con esas palabras. Cuando
+  // el techo es otro, la cifra es margen del ciclo y llamarla "en la cuenta"
+  // era el letrero que convertía −$5,146 de margen en un saldo bancario que
+  // nadie tenía.
+  const enCuenta = simulacion && margen.tope === 'caja' && margen.efectivoHoy !== null
   const cifra = simulacion
-    ? veredicto.margenDespues
+    ? enCuenta
+      ? margen.efectivoHoy! - monto
+      : veredicto.margenDespues
     : porDia
       ? margen.gastoDiarioSugerido
       : margen.margenLibre
   const nivel = veredicto.nivel
   // "tu quincena" / "tu semana" / "tu sueldo": nombrar el cobro por su ciclo.
   const cobro = margen.ciclo.tipo === 'mensual' ? 'sueldo' : margen.ciclo.nombre
-  const texto = formatearMoneda(cifra, moneda, locale, { conDecimales: false })
-  const dinero = (c: number) => formatearMoneda(c, moneda, locale, { conDecimales: false })
+  // Los centavos aparecen solo si existen: $3.50 no puede leerse como $4.
+  const texto = formatearMoneda(cifra, moneda, locale, { conDecimales: 'auto' })
+  const dinero = (c: number) => formatearMoneda(c, moneda, locale, { conDecimales: 'auto' })
 
   return (
     <div className="flex flex-col items-center">
@@ -117,7 +126,7 @@ export function MedidorMargen({
           </p>
           <p className="mt-0.5 text-xs text-suave">
             {simulacion
-              ? margen.limitadoPorSaldo
+              ? enCuenta
                 ? 'te quedarían en la cuenta'
                 : 'te quedarían libres'
               : porDia
@@ -166,22 +175,29 @@ export function MedidorMargen({
           onClick={() => setDesglose(true)}
           className="mt-1.5 flex items-center gap-1.5 rounded-campo px-2 py-1 text-center text-[13px] text-suave transition-colors hover:bg-elevada"
         >
-          {/* Cuando el tope lo pone la cuenta y no el ciclo, hay que decirlo
-              con ese nombre: "vas por encima de lo que entró" no describe a
-              quien simplemente todavía no cobra. */}
+          {/* Cada tope tiene su explicación y son tres cosas distintas: no
+              tener el dinero, no alcanzar para lo comprometido, y haber
+              gastado más de lo que entró. Dar la equivocada es lo que hace
+              que el número parezca sacado de la manga. */}
           <span>
-            {margen.limitadoPorSaldo ? (
+            {margen.tope === 'caja' ? (
               <>
                 Tu cuenta trae{' '}
                 <span className="cifras font-medium text-rojo">
-                  {dinero(margen.dineroDisponible ?? 0)}
+                  {dinero(margen.efectivoHoy ?? 0)}
                 </span>{' '}
                 {margen.cobroPendiente || margen.ingresosEstimados
                   ? `y tu ${cobro} todavía no cae`
                   : 'y ya está comprometida'}
               </>
-            ) : margen.cobroPendiente ? (
-              <>Dijiste que tu {cobro} todavía no cae; esto es lo que hay hasta entonces</>
+            ) : margen.tope === 'compromisos' ? (
+              <>
+                Te faltan{' '}
+                <span className="cifras font-medium text-rojo">
+                  {dinero(Math.abs(margen.margenDisponible))}
+                </span>{' '}
+                para lo que ya está comprometido {esteCiclo(margen.ciclo.tipo)}
+              </>
             ) : (
               <>
                 Vas{' '}
@@ -199,10 +215,23 @@ export function MedidorMargen({
       {porDia && (
         <p className="mt-1 text-center text-[13px] text-tenue">
           Cierra el {formatearFechaCorta(margen.ciclo.fin, locale)}
-          {margen.colchonTotal !== null && margen.colchonTotal > 0 && (
+          {/* Con qué se cierra el ciclo, ya contando el cobro que falta y lo
+              comprometido. Antes aquí iba "de respaldo" el colchón, que resta
+              compromisos de la caja sin sumar el cobro: en la primera semana
+              de la quincena esa cifra sale negativa aunque el ciclo cierre
+              con dinero de sobra. */}
+          {margen.proyeccionCierre !== null && (
             <>
               {' · '}
-              <span className="cifras">{dinero(margen.colchonTotal)}</span> de respaldo
+              cerrarías con{' '}
+              <span
+                className={clases(
+                  'cifras',
+                  margen.proyeccionCierre >= 0 ? 'text-suave' : 'text-rojo',
+                )}
+              >
+                {dinero(margen.proyeccionCierre)}
+              </span>
             </>
           )}
         </p>

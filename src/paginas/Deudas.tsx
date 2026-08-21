@@ -59,7 +59,7 @@ export function Deudas() {
   const activas = deudas.filter((d) => !d.liquidada)
   const liquidadas = deudas.filter((d) => d.liquidada)
   const vencimientos = useMemo(() => proximosVencimientos(deudas, hoy, 30), [deudas, hoy])
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
 
   return (
     <div className="space-y-6">
@@ -223,7 +223,7 @@ function FichaDeuda({
   onBorrar: () => void
 }) {
   const { ajustes, hoy } = useFinanzas()
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
   const proximo = siguienteOcurrencia(deuda.fechaLimite, deuda.periodicidad, hoy)
   const unidad = proyeccion.pagosRestantes === 1 ? 'pago' : 'pagos'
 
@@ -345,7 +345,7 @@ function FormularioDeuda({ editando, onCerrar }: { editando?: Deuda; onCerrar: (
   const porMes = pagosPorMes(periodicidad) || 1
   const mensual = Math.round(porPago * porMes)
   const pagosReales = porPago > 0 ? Math.ceil(monto / porPago) : 0
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
 
   const unidad = periodicidad === 'mensual' ? 'mensualidades' : 'pagos'
   const valido = acreedor.trim() !== '' && monto > 0
@@ -580,7 +580,7 @@ function FormularioPago({ deuda, onCerrar }: { deuda: Deuda; onCerrar: () => voi
     mostrar(
       restante === 0
         ? `¡Liquidaste ${deuda.acreedor}!`
-        : `Abono registrado. Quedan ${formatearMoneda(restante, ajustes.moneda, ajustes.locale, { conDecimales: false })}`,
+        : `Abono registrado. Quedan ${formatearMoneda(restante, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })}`,
     )
     onCerrar()
   }

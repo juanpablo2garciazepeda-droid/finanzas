@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trash2, KeyRound, Shield, User as UserIcon, ChevronRight, X } from 'lucide-react'
+import {
+  BadgeCheck,
+  CalendarDays,
+  ChevronRight,
+  CreditCard,
+  Folder,
+  KeyRound,
+  Mail,
+  Receipt,
+  Repeat,
+  Shield,
+  Target,
+  Trash2,
+  Wallet,
+  X,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/estado/auth'
 import { useT } from '@/estado/i18n'
@@ -293,6 +308,19 @@ export function Admin() {
             data={detalleAbierto}
             miId={usuario?.id}
             alCerrar={() => setDetalleAbierto(null)}
+            alForzarReset={() =>
+              void onForzarReset({
+                id: detalleAbierto.usuario.id,
+                email: detalleAbierto.usuario.email,
+                displayName: detalleAbierto.usuario.displayName,
+                fotoUrl: detalleAbierto.usuario.fotoUrl,
+                emailVerificado: detalleAbierto.usuario.emailVerificado,
+                rol: detalleAbierto.usuario.rol,
+                idioma: detalleAbierto.usuario.idioma,
+                creadoEn: detalleAbierto.usuario.creadoEn,
+                updatedAt: detalleAbierto.usuario.updatedAt,
+              })
+            }
             alCambiarRol={(rol) => {
               void onCambiarRol(
                 {
@@ -426,28 +454,41 @@ function ConfirmarBorradoLote({
   )
 }
 
+/**
+ * Detalle de un usuario, en tres bloques con jerarquía en vez de una rejilla
+ * de seis campos sueltos: quién es, cómo está su acceso, y qué tiene cargado.
+ *
+ * El bloque de contraseña dice lo que hay que decir: se guarda como hash y
+ * NO se puede leer. Es la pregunta que todo admin hace, y contestarla con un
+ * campo vacío o con el hash crudo no ayuda a nadie. Lo accionable —mandarle
+ * un enlace para que ponga una nueva— vive justo debajo del aviso.
+ */
 function DetalleAdmin({
   data,
   miId,
   alCerrar,
   alCambiarRol,
+  alForzarReset,
 }: {
   data: AdminDetalleUsuario
   miId?: string
   alCerrar: () => void
   alCambiarRol: (rol: 'usuario' | 'admin') => void
+  alForzarReset: () => void
 }) {
   const t = useT()
   const u = data.usuario
   const esMiUsuario = u.id === miId
+  const c = data.conteos
   const totalDatos =
-    data.conteos.transacciones +
-    data.conteos.categorias +
-    data.conteos.deudas +
-    data.conteos.metas
+    c.transacciones + c.categorias + c.presupuestos + c.deudas + c.metas + c.recurrentes
+
+  const fecha = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '—'
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* ── Identidad ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <Avatar nombre={u.displayName || u.email} foto={u.fotoUrl} tamano="lg" />
         <div className="min-w-0 flex-1">
@@ -455,70 +496,97 @@ function DetalleAdmin({
             {u.displayName || u.email}
           </p>
           <p className="truncate text-sm text-suave">{u.email}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span
+              className={clases(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                u.rol === 'admin' ? 'bg-acento/10 text-acento' : 'bg-elevada text-suave',
+              )}
+            >
+              {u.rol === 'admin' && <Shield className="size-3" aria-hidden />}
+              {t(`comun.${u.rol}`)}
+            </span>
+            <span
+              className={clases(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
+                u.emailVerificado ? 'bg-verde/10 text-verde' : 'bg-ambar/10 text-ambar',
+              )}
+            >
+              <BadgeCheck className="size-3" aria-hidden />
+              {t(u.emailVerificado ? 'admin.verificado' : 'admin.sin_verificar')}
+            </span>
+            {esMiUsuario && (
+              <span className="rounded-full bg-elevada px-2 py-0.5 text-[11px] text-tenue">
+                {t('admin.tu')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-[13px]">
-        <Campo etiqueta={t('admin.rol')}>
-          <span
-            className={clases(
-              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-              u.rol === 'admin' ? 'bg-acento/10 text-acento' : 'bg-elevada text-suave',
-            )}
-          >
-            {u.rol === 'admin' && <Shield className="size-3" aria-hidden />}
-            {t(`comun.${u.rol}`)}
-          </span>
-        </Campo>
-        <Campo etiqueta={t('admin.idioma')}>{u.idioma.toUpperCase()}</Campo>
-        <Campo etiqueta={t('admin.email_verificado')}>
-          {u.emailVerificado ? t('comun.si') : t('comun.no')}
-        </Campo>
-        <Campo etiqueta={t('admin.debe_cambiar_password')}>
-          {u.debeCambiarPassword ? t('comun.si') : t('comun.no')}
-        </Campo>
-        <Campo etiqueta={t('admin.creado_en')}>
-          {new Date(u.creadoEn).toLocaleDateString()}
-        </Campo>
-        <Campo etiqueta={t('admin.ultimo_cambio_password')}>
-          {u.passwordActualizadoEn
-            ? new Date(u.passwordActualizadoEn).toLocaleDateString()
-            : '—'}
-        </Campo>
-      </div>
+      {/* ── Cuenta ────────────────────────────────────────────────────── */}
+      <Bloque titulo={t('admin.cuenta')}>
+        <Renglon icono={CalendarDays} etiqueta={t('admin.miembro_desde')} valor={fecha(u.creadoEn)} />
+        <Renglon icono={Mail} etiqueta={t('admin.idioma')} valor={u.idioma.toUpperCase()} />
+        <Renglon
+          icono={Repeat}
+          etiqueta={t('admin.resumen_semanal')}
+          valor={t(u.recibirDigest ? 'comun.activo' : 'comun.inactivo')}
+        />
+      </Bloque>
 
+      {/* ── Seguridad ─────────────────────────────────────────────────── */}
+      <Bloque titulo={t('admin.seguridad')}>
+        <div className="px-3 py-3">
+          <div className="flex items-start gap-2.5">
+            <KeyRound className="mt-0.5 size-4 shrink-0 text-tenue" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-tinta">{t('admin.contrasena')}</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-tenue">
+                {t('admin.contrasena_no_visible')}
+              </p>
+              <p className="mt-1.5 text-[12px] text-suave">
+                {u.passwordActualizadoEn
+                  ? t('admin.cambiada_el', { fecha: fecha(u.passwordActualizadoEn) })
+                  : t('admin.sin_cambio_password')}
+                {' · '}
+                <span className={u.debeCambiarPassword ? 'text-ambar' : 'text-tenue'}>
+                  {t(u.debeCambiarPassword ? 'admin.pendiente_cambio' : 'admin.password_al_dia')}
+                </span>
+              </p>
+              <Boton
+                variante="secundario"
+                onClick={alForzarReset}
+                disabled={esMiUsuario}
+                className="mt-2.5 text-[12px]"
+              >
+                <KeyRound className="size-3.5" aria-hidden />
+                {t('admin.enviar_reset')}
+              </Boton>
+            </div>
+          </div>
+        </div>
+      </Bloque>
+
+      {/* ── Qué tiene cargado ─────────────────────────────────────────── */}
       <div>
-        <p className="mb-2 text-[13px] font-medium text-suave">
+        <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-wide text-tenue">
           {t('admin.datos_del_usuario')}
         </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <DatoChip
-            icono={KeyRound}
-            etiqueta={t('admin.transacciones')}
-            valor={data.conteos.transacciones}
-          />
-          <DatoChip
-            icono={UserIcon}
-            etiqueta={t('admin.categorias')}
-            valor={data.conteos.categorias}
-          />
-          <DatoChip
-            icono={Shield}
-            etiqueta={t('admin.deudas')}
-            valor={data.conteos.deudas}
-          />
-          <DatoChip
-            icono={KeyRound}
-            etiqueta={t('admin.metas')}
-            valor={data.conteos.metas}
-          />
+        <div className="grid grid-cols-3 gap-2">
+          <DatoChip icono={Receipt} etiqueta={t('admin.transacciones')} valor={c.transacciones} />
+          <DatoChip icono={Folder} etiqueta={t('admin.categorias')} valor={c.categorias} />
+          <DatoChip icono={Wallet} etiqueta={t('admin.presupuestos')} valor={c.presupuestos} />
+          <DatoChip icono={CreditCard} etiqueta={t('admin.deudas')} valor={c.deudas} />
+          <DatoChip icono={Target} etiqueta={t('admin.metas')} valor={c.metas} />
+          <DatoChip icono={Repeat} etiqueta={t('admin.recurrentes')} valor={c.recurrentes} />
         </div>
-        <p className="mt-2 text-[11px] text-tenue">
+        <p className="mt-2 px-1 text-[11px] text-tenue">
           {t('admin.total_datos', { n: totalDatos })}
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-borde pt-3">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-borde pt-4">
         {u.rol === 'admin' ? (
           <Boton
             variante="secundario"
@@ -531,16 +599,17 @@ function DetalleAdmin({
           </Boton>
         ) : (
           <Boton
-            variante="primario"
+            variante="secundario"
             onClick={() => alCambiarRol('admin')}
             className="text-[13px]"
             disabled={esMiUsuario}
             title={esMiUsuario ? t('admin.no_cambiar_rol_propio') : undefined}
           >
+            <Shield className="size-3.5" aria-hidden />
             {t('admin.hacer_admin')}
           </Boton>
         )}
-        <Boton variante="secundario" onClick={alCerrar} className="text-[13px]">
+        <Boton variante="primario" onClick={alCerrar} className="text-[13px]">
           {t('comun.cerrar')}
         </Boton>
       </div>
@@ -548,17 +617,33 @@ function DetalleAdmin({
   )
 }
 
-function Campo({
-  etiqueta,
-  children,
-}: {
-  etiqueta: string
-  children: React.ReactNode
-}) {
+/** Grupo con título pequeño y tarjeta de renglones divididos. */
+function Bloque({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-tenue">{etiqueta}</p>
-      <div className="mt-0.5 text-tinta">{children}</div>
+      <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-wide text-tenue">
+        {titulo}
+      </p>
+      <div className="divide-y divide-borde rounded-tarjeta border border-borde">{children}</div>
+    </div>
+  )
+}
+
+/** Renglón etiqueta → valor. El valor a la derecha para que la columna alinee. */
+function Renglon({
+  icono: Icono,
+  etiqueta,
+  valor,
+}: {
+  icono: React.ComponentType<{ className?: string }>
+  etiqueta: string
+  valor: string
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <Icono className="size-4 shrink-0 text-tenue" aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-[13px] text-suave">{etiqueta}</span>
+      <span className="shrink-0 text-[13px] font-medium text-tinta">{valor}</span>
     </div>
   )
 }
@@ -573,10 +658,10 @@ function DatoChip({
   valor: number
 }) {
   return (
-    <div className="rounded-tarjeta border border-borde bg-superficie p-3 text-center">
+    <div className="rounded-tarjeta border border-borde bg-superficie p-2.5 text-center">
       <Icono className="mx-auto size-4 text-suave" aria-hidden />
-      <p className="mt-1 text-lg font-semibold text-tinta cifras">{valor}</p>
-      <p className="text-[11px] text-tenue">{etiqueta}</p>
+      <p className="cifras mt-1 text-lg font-semibold text-tinta">{valor}</p>
+      <p className="text-[11px] leading-tight text-tenue">{etiqueta}</p>
     </div>
   )
 }

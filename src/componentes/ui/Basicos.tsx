@@ -118,7 +118,13 @@ export function Entrada({ className, ref, ...props }: InputHTMLAttributes<HTMLIn
 function limpiarMonto(texto: string): string {
   let limpio = texto.replace(/[^\d.]/g, '')
   const punto = limpio.indexOf('.')
-  if (punto !== -1) limpio = limpio.slice(0, punto + 1) + limpio.slice(punto + 1).replace(/\./g, '')
+  if (punto !== -1) {
+    // Un solo punto, y como mucho dos decimales: el dinero no tiene milésimas.
+    // Dejar escribir "3.505" hacía que el campo mostrara una cifra y se
+    // guardara otra, porque el dominio redondea al centavo al convertir.
+    const decimales = limpio.slice(punto + 1).replace(/\./g, '').slice(0, 2)
+    limpio = `${limpio.slice(0, punto)}.${decimales}`
+  }
   return limpio
 }
 

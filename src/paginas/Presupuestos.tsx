@@ -52,7 +52,7 @@ export function Presupuestos() {
     (c) => c.tipo === 'egreso' && !vigentes.some((p) => p.categoriaId === c.id),
   )
 
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
 
   async function copiar() {
     const copiados = await copiarPresupuestos(anterior, periodo)

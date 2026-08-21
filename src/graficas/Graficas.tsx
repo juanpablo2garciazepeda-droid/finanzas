@@ -43,7 +43,7 @@ function CuadroDatos({
             <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: fila.color }} />
             <span className="text-tenue">{fila.nombre}</span>
             <span className="cifras ml-auto font-medium text-tinta">
-              {formatearMoneda(fila.valor, formato.moneda, formato.locale, { conDecimales: false })}
+              {formatearMoneda(fila.valor, formato.moneda, formato.locale, { conDecimales: 'auto' })}
             </span>
           </li>
         ))}
@@ -211,7 +211,7 @@ export function GraficaCategorias({ datos }: { datos: RebanadaCategoria[] }) {
               {Math.round((rebanada.valor / total) * 100)}%
             </span>
             <span className="cifras w-24 shrink-0 text-right font-medium text-tinta">
-              {formatearMoneda(rebanada.valor, formato.moneda, formato.locale, { conDecimales: false })}
+              {formatearMoneda(rebanada.valor, formato.moneda, formato.locale, { conDecimales: 'auto' })}
             </span>
           </li>
         ))}

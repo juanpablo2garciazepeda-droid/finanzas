@@ -55,6 +55,18 @@ export class Ajuste {
   @Column({ name: 'ultima_revision_vencimientos', type: 'text', default: '' })
   ultimaRevisionVencimientos!: string;
 
+  /**
+   * Avisos de vencimiento por correo. Van por separado de
+   * `notificacionesActivas`, que es el permiso del navegador: el correo llega
+   * aunque la app lleve una semana cerrada, que es justo cuando hace falta.
+   */
+  @Column({
+    name: 'avisos_correo_vencimientos',
+    type: 'boolean',
+    default: true,
+  })
+  avisosCorreoVencimientos!: boolean;
+
   @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamptz' })
   actualizadoEn!: Date;
 }

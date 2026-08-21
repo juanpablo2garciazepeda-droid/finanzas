@@ -131,13 +131,19 @@ export function generarReporteMensual(ctx: ContextoFinanciero, pagos: PagoDeuda[
       ['Egresos', dinero(margen.egresos)],
       ['Balance', dinero(margen.flujoDelCiclo)],
       ['Compromiso de deuda', dinero(margen.compromisoDeuda)],
+      ['Gastos fijos por cobrarse', dinero(margen.compromisoRecurrente)],
       ['Aporte pendiente a metas', dinero(margen.compromisoMeta)],
-      ['Margen libre', dinero(margen.margenLibre)],
-      // Con saldo declarado el margen libre puede ser una proyección; lo que
-      // se puede gastar de verdad es el mínimo contra la cuenta.
-      ...(margen.limitadoPorSaldo
-        ? [['Disponible real (lo limita tu saldo)', dinero(margen.margenDisponible)]]
+      ['Margen libre del ciclo', dinero(margen.margenLibre)],
+      // La caja va aparte del flujo: son dos magnitudes y mezclarlas en un
+      // solo renglón es lo que hacía que el reporte no cuadrara con la app.
+      ...(margen.efectivoHoy !== null
+        ? [
+            ['En la cuenta hoy', dinero(margen.efectivoHoy)],
+            ['Por entrar en el ciclo', dinero(margen.porEntrar)],
+            ['Proyección al cierre', dinero(margen.proyeccionCierre ?? 0)],
+          ]
         : []),
+      ['Disponible para gastar', dinero(margen.margenDisponible)],
       ['Deuda total', dinero(deudaTotal(ctx.deudas))],
       ['Ahorro total', dinero(ahorroTotal(ctx.metas))],
       ['Salud financiera', `${salud.puntaje}/100 · ${salud.etiqueta}`],

@@ -54,6 +54,7 @@ interface ApiAjustes {
   diasAvisoVencimiento: number
   umbralPrecaucion: string | number
   notificacionesActivas: boolean
+  avisosCorreoVencimientos?: boolean
   ultimaRevisionVencimientos: string
   actualizadoEn?: string
 }
@@ -163,6 +164,9 @@ function ajusteDesdeApi(a: ApiAjustes): Ajustes {
     diasAvisoVencimiento: a.diasAvisoVencimiento,
     umbralPrecaucion: aNumero(a.umbralPrecaucion),
     notificacionesActivas: a.notificacionesActivas,
+    // Un backend anterior a esta columna no manda el campo; la ausencia se
+    // lee como "sí", que es el default del servidor.
+    avisosCorreoVencimientos: a.avisosCorreoVencimientos ?? true,
     ultimaRevisionVencimientos: a.ultimaRevisionVencimientos,
   }
 }
@@ -186,6 +190,8 @@ function ajusteHaciaApi(cambios: Partial<Ajustes>): Partial<ApiAjustes> {
     out.umbralPrecaucion = cambios.umbralPrecaucion.toFixed(2)
   }
   if (cambios.notificacionesActivas !== undefined) out.notificacionesActivas = cambios.notificacionesActivas
+  if (cambios.avisosCorreoVencimientos !== undefined)
+    out.avisosCorreoVencimientos = cambios.avisosCorreoVencimientos
   if (cambios.ultimaRevisionVencimientos !== undefined) {
     out.ultimaRevisionVencimientos = cambios.ultimaRevisionVencimientos
   }
@@ -325,6 +331,7 @@ export async function cargarTodo(): Promise<{
   pagos: PagoDeuda[]
   metas: Meta[]
   aportes: AporteMeta[]
+  recurrentes: GastoRecurrente[]
 }> {
   // Un solo round-trip al backend; el servidor reparaleliza las queries.
   // Antes eran 6 + N_deudas + N_metas (~11 con 3 deudas y 2 metas), y eso en
@@ -338,6 +345,7 @@ export async function cargarTodo(): Promise<{
     metas: ApiMeta[]
     pagos: ApiPagoDeuda[]
     aportes: ApiAporteMeta[]
+    recurrentes?: ApiRecurrente[]
   }>('/inicio')
 
   // Un fallo de red NO es "esta cuenta está vacía". Devolver listas vacías
@@ -360,6 +368,9 @@ export async function cargarTodo(): Promise<{
     pagos: d.pagos.map(pagoDesdeApi),
     metas: d.metas.map(metaDesdeApi),
     aportes: d.aportes.map(aporteDesdeApi),
+    // Opcional: un backend anterior a este cambio no manda el campo, y la
+    // app tiene que seguir arrancando en vez de romperse en el `.map`.
+    recurrentes: (d.recurrentes ?? []).map(recurrenteDeApi),
   }
 }
 

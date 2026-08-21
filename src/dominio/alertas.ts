@@ -3,6 +3,7 @@ import type {
   Ajustes,
   Categoria,
   Deuda,
+  GastoRecurrente,
   Meta,
   NivelAlerta,
   PagoDeuda,
@@ -12,10 +13,11 @@ import type {
   Veredicto,
 } from './tipos'
 import { formatearMoneda, formatearPorcentaje, fraccion, sumar } from './dinero'
-import { enDias, periodoAnterior, periodoDe, ultimosPeriodos } from './fechas'
+import { diasEntre, enDias, periodoAnterior, periodoDe, ultimosPeriodos } from './fechas'
 import { cicloDe, esteCiclo, type Ciclo } from './ciclos'
 import { compromisoDeudas, proximosVencimientos } from './deudas'
 import { compromisoMetas } from './metas'
+import { egresosFijosPendientes, ingresosProgramados } from './recurrentes'
 import { calcularSaldo, type Saldo } from './saldo'
 import { presupuestosDelPeriodo, totalPorTipo, transaccionesDelPeriodo } from './presupuestos'
 
@@ -34,6 +36,12 @@ export interface ContextoFinanciero {
   metas: Meta[]
   aportes: AporteMeta[]
   /**
+   * Plantillas de gasto e ingreso fijo. Opcional para que el dominio se pueda
+   * probar sin ellas, pero cuando están cambian el resultado: son compromisos
+   * con fecha y monto, no estimaciones.
+   */
+  recurrentes?: GastoRecurrente[]
+  /**
    * Inicio del ciclo en el que la persona respondió "todavía no cobro". Si
    * coincide con el ciclo en curso, el ingreso estimado deja de contar como
    * dinero gastable: ella misma confirmó que no está en la cuenta.
@@ -42,51 +50,95 @@ export interface ContextoFinanciero {
 }
 
 /**
- * Dos magnitudes que no se pueden mezclar, y que antes vivían en un solo campo
- * `balance` que significaba una u otra según hubiera saldo declarado:
+ * Qué le pone el techo a lo que se puede gastar hoy. Son tres restricciones
+ * distintas y confundirlas es lo que hacía que los números no cuadraran:
  *
- * - **Stock** (`dineroDisponible`, `colchonTotal`): dinero que existe, venga de
- *   donde venga, incluidos ahorros de meses pasados.
- * - **Flujo** (`flujoDelCiclo`, `margenLibre`): lo que entró menos lo que salió
- *   dentro de esta ventana de cobro.
+ * - `caja`: no puedes gastar dinero que no está en la cuenta. Es liquidez.
+ * - `compromisos`: puedes gastarlo, pero entonces no alcanza para lo que ya
+ *   tiene dueño antes de que cierre el ciclo. Es solvencia.
+ * - `flujo`: alcanza y sobra, pero gastarlo sería comerte el ahorro de meses
+ *   pasados en los días que quedan de esta quincena. Es prudencia.
+ */
+export type Tope = 'caja' | 'compromisos' | 'flujo'
+
+/**
+ * Las tres magnitudes de una cuenta personal, que antes vivían mezcladas:
  *
- * Todo lo que se reparte entre días sale del flujo. Repartir el stock invitaba
- * a gastarse los ahorros de meses en los tres días que quedan de la quincena.
+ * - **Caja** (`efectivoHoy`): el dinero que existe ahora mismo. Es un saldo,
+ *   una foto.
+ * - **Flujo** (`flujoDelCiclo`, `margenLibre`): lo que entró menos lo que
+ *   salió dentro de esta ventana de cobro. Es una película.
+ * - **Compromisos** (`comprometido`): salidas que ya se contrajeron y todavía
+ *   no ocurren. No son gasto todavía, pero ese dinero ya tiene dueño.
+ *
+ * La cifra que preside el tablero, `margenDisponible`, es la más restrictiva
+ * de las tres. Restar los compromisos de la caja y llamar al resultado "lo
+ * que te queda en la cuenta" era el error de origen: alguien con $27 y una
+ * deuda de $5,173 leía "-$5,146 te quedarían en la cuenta" cuando en la
+ * cuenta tenía $27 y el pago se iba a cubrir con la quincena que faltaba.
  */
 export interface Margen {
   /** Ventana sobre la que se calculó todo: mes, quincena o semana. */
   ciclo: Ciclo
-  /** Lo que se usa para calcular: real si lo hay, estimado si no. */
+
+  // ── Flujo del ciclo ──────────────────────────────────────────────────
+  /** Ingreso del ciclo: lo registrado más lo que falta por caer. */
   ingresos: number
   /** Lo que de verdad entró y está registrado. Nunca una estimación. */
   ingresosReales: number
   egresos: number
   /** FLUJO: ingresos menos egresos del ciclo. */
   flujoDelCiclo: number
-  /** STOCK: dinero que hay ahora. `null` si no se declaró saldo. */
+
+  // ── Caja ─────────────────────────────────────────────────────────────
+  /** El dinero real, si la persona declaró su saldo. */
+  saldo: Saldo
+  /** Lo que hay HOY en la cuenta. `null` si no se declaró saldo. */
+  efectivoHoy: number | null
+  /** Alias histórico de `efectivoHoy`, que usan tablero y gráficas. */
   dineroDisponible: number | null
+  /** Ingreso del ciclo que todavía no cae. Cero si ya cayó. */
+  porEntrar: number
+  /** Cuándo cae. Solo se sabe con una plantilla de ingreso recurrente. */
+  fechaProximoCobro: string | null
+
+  // ── Compromisos ──────────────────────────────────────────────────────
   /** Pagos de deuda que vencen antes de que cierre el ciclo. */
   compromisoDeuda: number
   /** La parte del aporte a metas que toca a este ciclo. */
   compromisoMeta: number
-  /** FLUJO menos compromisos. Es una proyección: cuenta el cobro que falta. */
-  margenLibre: number
-  /** STOCK menos compromisos: el respaldo real. `null` sin saldo declarado. */
-  colchonTotal: number | null
+  /** Gastos fijos con plantilla que aún no se cobran en este ciclo. */
+  compromisoRecurrente: number
+  /** Suma de los tres: el dinero del ciclo que ya tiene dueño. */
+  comprometido: number
   /**
-   * Lo que de verdad se puede gastar: el mínimo entre el flujo y el colchón.
+   * Pagos que caen DESPUÉS del cierre, dentro de la ventana de aviso. Son
+   * contexto y no se restan: los cubre el cobro siguiente, no el dinero de
+   * hoy. Restarlos aquí es lo que hundía el margen sin razón.
+   */
+  comprometidoDespues: number
+
+  // ── Resultados ───────────────────────────────────────────────────────
+  /** FLUJO menos compromisos. Proyección: cuenta el cobro que falta. */
+  margenLibre: number
+  /** CAJA menos compromisos. Negativo = el cobro que falta es imprescindible. */
+  colchonTotal: number | null
+  /** Con qué se cierra el ciclo: caja + lo que entra − lo comprometido. */
+  proyeccionCierre: number | null
+  /**
+   * Lo que de verdad se puede gastar hoy: el más chico de los tres topes.
    * Es la única cifra que debe llegar a la interfaz cuando la pregunta es
-   * "¿puedo gastar esto?"; las otras dos son insumos suyos.
+   * "¿puedo gastar esto?"; las otras son insumos suyos.
    */
   margenDisponible: number
+  /** Cuál de los tres topes está mandando. */
+  tope: Tope
   /** El disponible lo limita la cuenta y no la proyección del ciclo. */
   limitadoPorSaldo: boolean
   /** La persona respondió que su cobro de este ciclo todavía no cae. */
   cobroPendiente: boolean
   /** Los ingresos del ciclo aún no aparecen y se estimó con otra fuente. */
   ingresosEstimados: boolean
-  /** El dinero real, si la persona declaró su saldo. */
-  saldo: Saldo
   diasRestantes: number
   /** Cuánto se puede gastar hoy sin agotar el margen antes de que cierre. */
   gastoDiarioSugerido: number
@@ -125,30 +177,51 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
   const ciclo = esMesActual
     ? cicloDe(ctx.hoy, ctx.ajustes.cicloPago)
     : cicloDe(`${ctx.periodo}-15`, 'mensual')
+  const recurrentes = ctx.recurrentes ?? []
 
   const enCiclo = ctx.transacciones.filter((t) => t.fecha >= ciclo.inicio && t.fecha <= ciclo.fin)
   const ingresosReales = totalPorTipo(enCiclo, 'ingreso')
   const egresos = totalPorTipo(enCiclo, 'egreso')
 
-  // Orden de confianza: lo que de verdad entró en el ciclo; si aún no entra
-  // nada, la parte del sueldo configurado que toca al ciclo; y si tampoco está
-  // configurado, su promedio histórico repartido igual.
+  // ── Lo que falta por entrar ──────────────────────────────────────────
+  //
+  // Orden de confianza, de mejor a peor:
+  //   1. una plantilla de ingreso recurrente: dice cuánto Y qué día;
+  //   2. la parte del sueldo configurado que le toca al ciclo;
+  //   3. el promedio histórico repartido igual.
+  //
+  // Las dos últimas son estimaciones y la app las nombra como tales.
+  const programado = ingresosProgramados(recurrentes, ctx.hoy, ciclo.fin)
   const mensualEstimado =
     ctx.ajustes.ingresoMensual > 0
       ? ctx.ajustes.ingresoMensual
       : ingresoTipico(ctx.transacciones, ctx.periodo)
   const estimado = ingresosReales === 0 ? Math.round(mensualEstimado / ciclo.porMes) : 0
-  const ingresos = ingresosReales > 0 ? ingresosReales : estimado
+  const porEntrar = programado.total > 0 ? programado.total : estimado
+  // Devengado: lo que el ciclo va a producir, esté o no depositado.
+  const ingresos = ingresosReales + porEntrar
 
-  // Los pagos que caen dentro del ciclo, y como mínimo la ventana de aviso que
-  // la persona configuró: si su corte es mañana, no puede sorprenderla.
-  const dias = Math.max(ciclo.diasRestantes, ctx.ajustes.diasAvisoVencimiento)
-  const compromisoDeuda = compromisoDeudas(ctx.deudas, ctx.hoy, dias)
+  // ── Compromisos ──────────────────────────────────────────────────────
+  //
+  // Solo lo que vence ANTES de que cierre el ciclo. Un pago que cae después
+  // del cierre lo cubre el cobro siguiente, no el dinero de hoy: restarlo
+  // aquí hundía el margen por algo que ya tenía con qué pagarse. Sigue
+  // avisándose, pero como contexto (`comprometidoDespues`).
+  const diasHastaCierre = Math.max(0, diasEntre(ctx.hoy, ciclo.fin))
+  const compromisoDeuda = compromisoDeudas(ctx.deudas, ctx.hoy, diasHastaCierre)
+  const ventanaAviso = Math.max(diasHastaCierre, ctx.ajustes.diasAvisoVencimiento)
+  const comprometidoDespues =
+    compromisoDeudas(ctx.deudas, ctx.hoy, ventanaAviso) - compromisoDeuda
 
   // El aporte a metas es mensual; a este ciclo le toca su parte proporcional
   // de lo que aún falta apartar en el mes.
   const pendienteMes = compromisoMetas(ctx.metas, ctx.aportes, ctx.periodo)
   const compromisoMeta = Math.ceil(pendienteMes / ciclo.restantesEnMes)
+
+  // Los gastos fijos que todavía no se cobran son salida segura.
+  const compromisoRecurrente = egresosFijosPendientes(recurrentes, ctx.hoy, ciclo.fin)
+
+  const comprometido = compromisoDeuda + compromisoMeta + compromisoRecurrente
 
   const saldo = calcularSaldo(
     ctx.ajustes.saldoInicial,
@@ -158,50 +231,46 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
     ctx.aportes,
   )
 
-  // El margen que se reparte entre días sale SIEMPRE del flujo del ciclo. El
-  // saldo declarado no entra aquí: es un stock, y dividir ahorros de meses
-  // entre los días que quedan de la quincena es un mal consejo.
   const flujoDelCiclo = ingresos - egresos
-  const margenLibre = flujoDelCiclo - compromisoDeuda - compromisoMeta
+  const margenLibre = flujoDelCiclo - comprometido
 
-  // El dinero que existe va por su cuenta, como respaldo y como contexto.
-  const dineroDisponible = saldo.declarado ? saldo.actual : null
-  const colchonTotal = saldo.declarado ? saldo.actual - compromisoDeuda - compromisoMeta : null
+  const efectivoHoy = saldo.declarado ? saldo.actual : null
+  const colchonTotal = efectivoHoy === null ? null : efectivoHoy - comprometido
+  const proyeccionCierre = efectivoHoy === null ? null : efectivoHoy + porEntrar - comprometido
 
   const diasRestantes = esMesActual ? ciclo.diasRestantes : 0
 
-  // "¿Cuánto puedo gastar?" tiene dos respuestas y hay que quedarse con la
-  // más chica. El flujo es una proyección: cuenta el sueldo del ciclo aunque
-  // todavía no haya caído. El colchón es lo que hay en la cuenta hoy. Antes
-  // del cobro manda el colchón, y prometer el flujo ahí es prometer dinero
-  // que no ha llegado.
-  //
-  // El mínimo se calcula UNA vez, aquí, y de aquí lo lee toda la app. Cuando
-  // vivía escondido dentro de `evaluarGasto`, el tablero seguía repartiendo
-  // el flujo y salían ecuaciones que no cuadran: "$6,500 libres ÷ 12 días =
-  // $0 al día". Sin saldo declarado no hay colchón y el flujo es el único
-  // dato disponible, que era el comportamiento histórico.
-  // Y hay un tercer dato, el más directo de todos: que la persona haya dicho
-  // "todavía no cobro". El tablero se lo pregunta, y esa respuesta solo servía
-  // para esconder la tarjeta. Es información, y este es su lugar: un sueldo
-  // que ella confirmó que no ha llegado no se puede gastar hoy. Si después lo
-  // registra, `ingresosReales` deja de ser cero y la respuesta caduca sola.
+  // La persona dijo "todavía no cobro". Es información, no solo un botón para
+  // esconder una tarjeta: un sueldo que ella confirmó que no ha llegado no se
+  // puede gastar hoy. Si después lo registra, `ingresosReales` deja de ser
+  // cero y la respuesta caduca sola.
   const cobroPendiente = ingresosReales === 0 && ctx.cicloSinCobrar === ciclo.inicio
 
-  // Con saldo declarado la cuenta es la autoridad y basta cruzarla con el
-  // flujo: ella ya refleja que el cobro no ha caído, y quien tiene $27 en el
-  // banco puede gastar $27 aunque no haya cobrado. Decirle que tiene cero
-  // sería la misma clase de mentira, nada más al revés.
+  // ── El techo ─────────────────────────────────────────────────────────
   //
-  // Sin saldo declarado no hay con qué contrastar la proyección, y ahí sí pesa
-  // la respuesta: si dijo que todavía no cobra, el estimado no se reparte.
-  const margenDisponible =
-    colchonTotal !== null
-      ? Math.min(margenLibre, colchonTotal)
-      : cobroPendiente
-        ? ingresosReales - egresos - compromisoDeuda - compromisoMeta
-        : margenLibre
-  const limitadoPorSaldo = colchonTotal !== null && colchonTotal < margenLibre
+  // Con saldo declarado se eligen las tres restricciones y gana la más
+  // apretada. El flujo solo compite cuando el ciclo cierra en positivo: si
+  // el ciclo ya viene corto, "lo que entró menos lo que salió" deja de ser
+  // una respuesta a "¿cuánto puedo gastar?" y quien contesta es la caja.
+  let margenDisponible: number
+  let tope: Tope = 'flujo'
+  if (efectivoHoy !== null && proyeccionCierre !== null) {
+    const candidatos: Array<[Tope, number]> = [
+      ['flujo', margenLibre],
+      ['caja', efectivoHoy],
+      ['compromisos', proyeccionCierre],
+    ]
+    const ganador = candidatos.reduce((a, b) => (b[1] < a[1] ? b : a))
+    tope = ganador[0]
+    margenDisponible = ganador[1]
+  } else if (cobroPendiente) {
+    // Sin saldo declarado no hay caja con qué contrastar la proyección, y ahí
+    // sí pesa la respuesta: si dijo que todavía no cobra, lo estimado no se
+    // reparte.
+    margenDisponible = ingresosReales - egresos - comprometido
+  } else {
+    margenDisponible = margenLibre
+  }
 
   const gastoDiarioSugerido =
     diasRestantes > 0 ? Math.max(0, Math.floor(margenDisponible / diasRestantes)) : 0
@@ -213,15 +282,23 @@ export function calcularMargen(ctx: ContextoFinanciero): Margen {
     egresos,
     saldo,
     flujoDelCiclo,
-    dineroDisponible,
+    efectivoHoy,
+    dineroDisponible: efectivoHoy,
+    porEntrar,
+    fechaProximoCobro: programado.fecha,
     compromisoDeuda,
     compromisoMeta,
+    compromisoRecurrente,
+    comprometido,
+    comprometidoDespues,
     margenLibre,
     colchonTotal,
+    proyeccionCierre,
     margenDisponible,
-    limitadoPorSaldo,
+    tope,
+    limitadoPorSaldo: tope === 'caja' && efectivoHoy !== null,
     cobroPendiente,
-    ingresosEstimados: ingresosReales === 0 && estimado > 0,
+    ingresosEstimados: ingresosReales === 0 && porEntrar > 0,
     diasRestantes,
     gastoDiarioSugerido,
   }
@@ -233,18 +310,27 @@ interface Formato {
 }
 
 /**
- * Sin centavos, igual que en el resto de la interfaz. Las razones acompañan a
- * la cifra grande del medidor, que va redondeada: leer "$1,830" arriba y
- * "$1,830.00" justo debajo se ve como dos cuentas distintas. Los centavos
- * siguen intactos por dentro; esto es solo cómo se enseña.
+ * Los centavos aparecen solo si existen. Las razones acompañan a la cifra
+ * grande del medidor, y leer "$1,830" arriba y "$1,830.00" debajo se ve como
+ * dos cuentas distintas; pero redondear $3.50 a $4 es inventar medio peso
+ * justo en la frase que dice cuánto le falta a alguien.
  */
 function dinero(centavos: number, f: Formato): string {
-  return formatearMoneda(centavos, f.moneda, f.locale, { conDecimales: false })
+  return formatearMoneda(centavos, f.moneda, f.locale, { conDecimales: 'auto' })
+}
+
+/** "tu quincena" / "tu semana" / "tu sueldo": el cobro nombrado por su ciclo. */
+function nombreCobro(ciclo: Ciclo): string {
+  return ciclo.tipo === 'mensual' ? 'tu sueldo' : `tu ${ciclo.nombre}`
+}
+
+function mayuscula(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
 
 /**
- * El semáforo. Con `monto` en cero devuelve la lectura general del mes, que es
- * lo que muestra el tablero; con un monto responde a "¿puedo gastar esto?".
+ * El semáforo. Con `monto` en cero devuelve la lectura general del ciclo, que
+ * es lo que muestra el tablero; con un monto responde a "¿puedo gastar esto?".
  *
  * Cada regla aporta su propia razón y el veredicto se queda con la peor. Las
  * razones importan tanto como el color: un rojo sin explicación no cambia el
@@ -322,17 +408,14 @@ export function evaluarGasto(
     }
   }
 
-  // 3. El margen: lo que queda después de deudas y metas.
-  //
-  // `margenDisponible` ya trae el mínimo entre el flujo del ciclo y el dinero
-  // real de la cuenta. Aquí solo se le resta el gasto que se está evaluando.
-  // Decir "te quedan $6,300 libres" con $27 en el banco era el bug de origen.
-  const margenRealDespues = margen.margenDisponible - monto
-  // La proyección sobra respecto de lo gastable por una de dos razones: la
-  // cuenta topa, o el cobro que la sostiene todavía no cae.
-  const flujoEsBinding = margen.margenDisponible >= margen.margenLibre
+  // 3. Liquidez, solvencia y prudencia — en ese orden, que es el orden en que
+  //    a una persona se le rompen las cosas.
+  const disponibleDespues = margen.margenDisponible - monto
+  const efectivoDespues = margen.efectivoHoy === null ? null : margen.efectivoHoy - monto
   const ventana = esteCiclo(margen.ciclo.tipo)
   const restoDel = margen.ciclo.tipo === 'mensual' ? 'del mes' : `de ${ventana.replace('esta ', 'la ')}`
+  const cobro = nombreCobro(margen.ciclo)
+  const faltaElCobro = margen.cobroPendiente || margen.ingresosEstimados
 
   if (margen.ingresos === 0) {
     razones.push({
@@ -340,29 +423,44 @@ export function evaluarGasto(
       nivel: 'ambar',
       texto: `Aún no registras ingresos, así que no puedo medir tu margen ${ventana}.`,
     })
-  } else if (margenRealDespues < 0) {
-    const faltante = -margenRealDespues
-    // El binding manda para decidir si el faltante lo cubre el colchón o no.
-    const loCubreElAhorro = !flujoEsBinding || (margen.colchonTotal !== null && margen.colchonTotal >= faltante)
-    const comeDeudas = margenRealDespues + margen.compromisoMeta < 0
-    if (loCubreElAhorro && !flujoEsBinding) {
-      // El flujo dice que alcanza, pero el binding (tu cuenta) no. Decirlo
-      // claro en lugar de decir "saldrían de tu ahorro" — el binding ya ES
-      // tu cuenta, no una proyección.
-      const cobro = margen.ciclo.tipo === 'mensual' ? 'tu sueldo' : `tu ${margen.ciclo.nombre}`
-      razones.push({
-        clave: 'margen',
-        nivel: 'rojo',
-        // Sin saldo declarado no hay "cuenta" de la que hablar: lo único que
-        // se sabe es que el cobro no ha caído, y eso es lo que hay que decir.
-        texto:
-          margen.dineroDisponible === null
-            ? `Dijiste que ${cobro} todavía no cae, así que no hay con qué cubrir ${simulacion ? 'este gasto' : 'lo que llevas'}.`
-            : simulacion
-              ? `Te faltan ${dinero(faltante, f)} en tu cuenta para este gasto. ${cobro[0].toUpperCase()}${cobro.slice(1)} aún no cae.`
-              : `Te faltan ${dinero(faltante, f)} en tu cuenta para lo que queda ${restoDel}.`,
-      })
-    } else if (loCubreElAhorro) {
+  } else if (efectivoDespues !== null && efectivoDespues < 0) {
+    // LIQUIDEZ. El dinero no está. Da igual lo que diga la proyección del
+    // ciclo: no se puede pagar con un depósito que todavía no llega.
+    //
+    // Esta rama es la corrección del bug de origen. Antes se restaban los
+    // compromisos del efectivo y se anunciaba el resultado como saldo de la
+    // cuenta: con $27 en el banco y una deuda de $5,173 por vencer, un gasto
+    // de $200 decía "te faltan $5,346 en tu cuenta". Faltaban $173. Los otros
+    // $5,173 eran un pago que se iba a cubrir con la quincena, y mezclarlos
+    // convertía un aviso correcto en una cifra que nadie reconoce.
+    razones.push({
+      clave: 'margen',
+      nivel: 'rojo',
+      texto: simulacion
+        ? `Te faltan ${dinero(-efectivoDespues, f)}: en la cuenta tienes ${dinero(margen.efectivoHoy!, f)} y esto cuesta ${dinero(monto, f)}.${faltaElCobro ? ` ${mayuscula(cobro)} todavía no cae.` : ''}`
+        : `Tu cuenta está en ${dinero(margen.efectivoHoy!, f)}.`,
+    })
+  } else if (margen.cobroPendiente && margen.efectivoHoy === null && disponibleDespues < 0) {
+    // Sin saldo declarado lo único que se sabe es lo que ella misma contestó.
+    razones.push({
+      clave: 'margen',
+      nivel: 'rojo',
+      texto: `Dijiste que ${cobro} todavía no cae, así que no hay con qué cubrir ${simulacion ? 'este gasto' : 'lo que llevas'}.`,
+    })
+  } else if (disponibleDespues < 0) {
+    const faltante = -disponibleDespues
+    // Lo que se sacrifica tiene un orden: el aporte a metas es la parte
+    // flexible del compromiso —posponerlo cuesta tiempo, no un recargo—; el
+    // pago de deuda y el gasto fijo son rígidos y fallarlos cuesta dinero.
+    const flexible = margen.compromisoMeta
+    const rigido = margen.compromisoDeuda + margen.compromisoRecurrente
+    // Con el flujo mandando, el bajón sale del ahorro y no de un impago: eso
+    // es un aviso, no una alarma. Si el techo lo pone la caja o los
+    // compromisos, no hay ahorro del que tirar y el color tiene que decirlo.
+    const loCubreElAhorro =
+      margen.tope === 'flujo' && margen.colchonTotal !== null && margen.colchonTotal >= faltante
+
+    if (loCubreElAhorro) {
       razones.push({
         clave: 'margen',
         nivel: 'ambar',
@@ -370,30 +468,33 @@ export function evaluarGasto(
           ? `Con esto gastas ${dinero(faltante, f)} más de lo que entró ${ventana}: saldrían de tu ahorro.`
           : `Llevas ${dinero(faltante, f)} más de lo que entró ${ventana}; estás tirando de tu ahorro.`,
       })
-    } else if (comeDeudas && margen.compromisoDeuda > 0) {
+    } else if (flexible > 0 && faltante <= flexible) {
       razones.push({
         clave: 'margen',
         nivel: 'rojo',
         texto: simulacion
-          ? `Te quedarías ${dinero(-margenRealDespues, f)} corto para los pagos de deuda que vienen.`
-          : `Te faltan ${dinero(-margenRealDespues, f)} para cubrir los pagos de deuda que vienen.`,
+          ? `Sacrificas ${dinero(faltante, f)} del aporte a tus metas ${ventana}.`
+          : `Te faltan ${dinero(faltante, f)} para el aporte a tus metas ${ventana}.`,
       })
-    } else if (margen.compromisoMeta > 0) {
-      const afectado = dinero(Math.min(-margenRealDespues, margen.compromisoMeta), f)
+    } else if (rigido > 0) {
+      const que =
+        margen.compromisoDeuda > 0
+          ? 'los pagos de deuda que vienen'
+          : 'tus gastos fijos de este ciclo'
       razones.push({
         clave: 'margen',
         nivel: 'rojo',
         texto: simulacion
-          ? `Sacrificas ${afectado} del aporte a tus metas ${ventana}.`
-          : `Te faltan ${afectado} para el aporte a tus metas ${ventana}.`,
+          ? `Te quedarías ${dinero(faltante, f)} corto para ${que}.`
+          : `Te faltan ${dinero(faltante, f)} para cubrir ${que}.`,
       })
     } else {
       razones.push({
         clave: 'margen',
         nivel: 'rojo',
         texto: simulacion
-          ? `Este gasto te deja ${dinero(-margenRealDespues, f)} en números rojos.`
-          : `Vas ${dinero(-margenRealDespues, f)} en números rojos ${ventana}.`,
+          ? `Este gasto te deja ${dinero(faltante, f)} en números rojos.`
+          : `Vas ${dinero(faltante, f)} en números rojos ${ventana}.`,
       })
     }
   } else if (margen.margenDisponible > 0 && monto > margen.margenDisponible * umbral) {
@@ -402,29 +503,20 @@ export function evaluarGasto(
     razones.push({
       clave: 'margen',
       nivel: 'ambar',
-      texto: margen.limitadoPorSaldo
-        ? `Te quedarían ${dinero(margenRealDespues, f)} en la cuenta: casi todo lo que tienes hoy.`
-        : `Te quedarían ${dinero(margenRealDespues, f)} libres para el resto ${restoDel}.`,
+      texto:
+        margen.tope === 'caja'
+          ? `Te quedarían ${dinero(efectivoDespues ?? disponibleDespues, f)} en la cuenta: casi todo lo que tienes hoy.`
+          : `Te quedarían ${dinero(disponibleDespues, f)} libres para el resto ${restoDel}.`,
     })
   } else if (simulacion) {
-    // Caso típico del usuario: declaró $21 de saldo, la quincena aún no cae,
-    // el flujo del ciclo dice que tiene $6,300 pero la cuenta solo trae $21.
-    // El flujo era una proyección; lo que cuenta HOY es el binding.
-    if (!flujoEsBinding) {
-      const enCuenta = margen.dineroDisponible!
-      const enCuentaDespues = enCuenta - monto
-      razones.push({
-        clave: 'margen',
-        nivel: 'verde',
-        texto: `Tu cuenta queda en ${dinero(enCuentaDespues, f)} tras este gasto. Hoy partes de ${dinero(enCuenta, f)}: este margen sale de lo que ya tienes, no de lo que va a entrar.`,
-      })
-    } else {
-      razones.push({
-        clave: 'margen',
-        nivel: 'verde',
-        texto: `Te quedan ${dinero(margenRealDespues, f)} libres después de este gasto.`,
-      })
-    }
+    razones.push({
+      clave: 'margen',
+      nivel: 'verde',
+      texto:
+        margen.tope === 'caja' && efectivoDespues !== null
+          ? `Te quedan ${dinero(efectivoDespues, f)} en la cuenta. Este margen sale de lo que ya tienes, no de lo que va a entrar.`
+          : `Te quedan ${dinero(disponibleDespues, f)} libres después de este gasto.`,
+    })
   }
 
   // 4. Vencimientos cercanos: contexto que el usuario necesita ver aunque todo
@@ -448,8 +540,8 @@ export function evaluarGasto(
   if (
     simulacion &&
     margen.compromisoMeta > 0 &&
-    margenRealDespues >= 0 &&
-    margenRealDespues < margen.compromisoMeta
+    disponibleDespues >= 0 &&
+    disponibleDespues < margen.compromisoMeta
   ) {
     razones.push({
       clave: 'meta',
@@ -462,10 +554,10 @@ export function evaluarGasto(
     nivel: peorNivel(razones.map((r) => r.nivel)),
     razones,
     // Los dos son el disponible: antes y después del gasto. Cuando `antes`
-    // era el flujo y `después` el binding, la resta que veía el usuario no
+    // era el flujo y `después` la caja, la resta que veía el usuario no
     // cuadraba con ninguna de las dos cifras.
     margenAntes: margen.margenDisponible,
-    margenDespues: margenRealDespues,
+    margenDespues: disponibleDespues,
   }
 }
 

@@ -5,6 +5,7 @@ import type {
   AporteMeta,
   Categoria,
   Deuda,
+  GastoRecurrente,
   Meta,
   PagoDeuda,
   Presupuesto,
@@ -26,6 +27,7 @@ export const AJUSTES: Ajustes = {
   diasAvisoVencimiento: 7,
   umbralPrecaucion: 0.8,
   notificacionesActivas: false,
+  avisosCorreoVencimientos: true,
   ultimaRevisionVencimientos: '',
 }
 
@@ -97,6 +99,23 @@ export function meta(parcial: Partial<Meta> = {}): Meta {
 
 export function aporte(parcial: Partial<AporteMeta> = {}): AporteMeta {
   return { id: id(), metaId: 'meta-1', monto: 200_000, fecha: '2026-08-01', nota: '', ...parcial }
+}
+
+export function recurrente(parcial: Partial<GastoRecurrente> = {}): GastoRecurrente {
+  return {
+    id: id(),
+    tipo: 'egreso',
+    monto: 600_000,
+    categoriaId: 'renta',
+    metodoPago: 'transferencia',
+    nota: 'Renta',
+    diaDelMes: 5,
+    iniciaEn: '2026-01-01',
+    terminaEn: null,
+    activo: true,
+    ultimoGeneradoEn: null,
+    ...parcial,
+  }
 }
 
 export function contexto(parcial: Partial<ContextoFinanciero> = {}): ContextoFinanciero {

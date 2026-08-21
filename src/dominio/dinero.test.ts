@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aCentavos, formatearMoneda, fraccion, sumar } from './dinero'
+import { aCentavos, formatearMoneda, fraccion, sumar, tieneCentavos } from './dinero'
 
 describe('aCentavos', () => {
   it('convierte texto con separadores a centavos', () => {
@@ -49,5 +49,34 @@ describe('formatearMoneda', () => {
   it('puede omitir decimales', () => {
     const texto = formatearMoneda(123456, 'MXN', 'es-MX', { conDecimales: false })
     expect(texto).not.toContain('.56')
+  })
+})
+
+describe('los centavos no se inventan ni se pierden', () => {
+  it('parsea decimales sobre el texto y no sobre un float', () => {
+    expect(aCentavos('3.50')).toBe(350)
+    expect(aCentavos('3.5')).toBe(350)
+    expect(aCentavos('0.01')).toBe(1)
+    expect(aCentavos('1,234.56')).toBe(123456)
+    // El tercer decimal decide el redondeo, sin pasar por el binario.
+    expect(aCentavos('3.545')).toBe(355)
+    expect(aCentavos('3.544')).toBe(354)
+    expect(aCentavos('-12.30')).toBe(-1230)
+    expect(aCentavos('.75')).toBe(75)
+  })
+
+  it('en modo auto muestra los centavos solo cuando existen', () => {
+    // El bug: declarar $3.50 de saldo y ver "$4" en el tablero. Redondear
+    // hacia arriba medio peso hace que la app parezca no estar escuchando.
+    expect(formatearMoneda(350, 'MXN', 'es-MX', { conDecimales: 'auto' })).toBe('$3.50')
+    expect(formatearMoneda(400, 'MXN', 'es-MX', { conDecimales: 'auto' })).toBe('$4')
+    expect(formatearMoneda(123456, 'MXN', 'es-MX', { conDecimales: 'auto' })).toBe('$1,234.56')
+  })
+
+  it('tieneCentavos distingue el monto redondo del que no lo es', () => {
+    expect(tieneCentavos(350)).toBe(true)
+    expect(tieneCentavos(400)).toBe(false)
+    expect(tieneCentavos(-350)).toBe(true)
+    expect(tieneCentavos(0)).toBe(false)
   })
 })

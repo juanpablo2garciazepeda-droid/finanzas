@@ -223,5 +223,6 @@ export class ActualizarAjustesDto {
   umbralPrecaucion?: string;
 
   @IsOptional() @IsBoolean() notificacionesActivas?: boolean;
+  @IsOptional() @IsBoolean() avisosCorreoVencimientos?: boolean;
   @IsOptional() @Matches(/^$|^\d{4}-\d{2}-\d{2}$/) ultimaRevisionVencimientos?: string;
 }

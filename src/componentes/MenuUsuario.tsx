@@ -7,6 +7,7 @@ import {
   LogOut,
   Moon,
   Pencil,
+  Shield,
   Sun,
   User,
 } from 'lucide-react'
@@ -168,6 +169,21 @@ export function MenuUsuario({
               navegar('/ajustes')
             }}
           />
+
+          {/* Administración. En escritorio también vive en la barra lateral,
+              pero la barra no existe en móvil y este menú era el único camino
+              que quedaba: sin esta entrada, un admin con teléfono no tenía
+              forma de llegar al panel. */}
+          {usuario?.rol === 'admin' && (
+            <Item
+              icono={Shield}
+              etiqueta={t('admin.titulo')}
+              alClick={() => {
+                onCerrar()
+                navegar('/admin')
+              }}
+            />
+          )}
 
           <div className="my-1 h-px bg-borde" />
 

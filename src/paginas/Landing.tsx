@@ -75,6 +75,7 @@ function construirEscenario(): ContextoFinanciero {
       diasAvisoVencimiento: 7,
       umbralPrecaucion: 0.8,
       notificacionesActivas: false,
+    avisosCorreoVencimientos: false,
       ultimaRevisionVencimientos: '',
     },
     categorias: [
@@ -156,7 +157,7 @@ export function Landing() {
 
   const veredicto = useMemo(() => evaluarGasto(monto, 'comida', ctx), [monto, ctx])
   const dinero = (c: number) =>
-    formatearMoneda(c, ctx.ajustes.moneda, ctx.ajustes.locale, { conDecimales: false })
+    formatearMoneda(c, ctx.ajustes.moneda, ctx.ajustes.locale, { conDecimales: 'auto' })
 
   return (
     <div className="min-h-dvh bg-fondo">

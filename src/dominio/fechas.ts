@@ -188,19 +188,36 @@ const DIAS_POR_PERIODICIDAD: Record<string, number> = {
  * Avanza una fecha de pago vencida hasta la siguiente ocurrencia futura.
  * Un pago mensual del día 5 sigue siendo del día 5 el mes que entra, así que
  * los mensuales avanzan por mes calendario y no por 30 días.
+ *
+ * Los meses se cuentan SIEMPRE desde la fecha original, no desde la anterior
+ * ocurrencia. Iterando con `setMonth(+1)`, un pago del 31 de enero se
+ * convierte en el 3 de marzo —febrero no tiene 31 y la fecha se desborda— y
+ * a partir de ahí la fecha de corte se va corriendo sola mes a mes. Cuando el
+ * día no existe en ese mes se usa el último: la deuda del 31 se cobra el 28
+ * de febrero y vuelve al 31 en marzo, que es lo que hace el banco.
  */
 export function siguienteOcurrencia(fechaLimite: string, periodicidad: string, hoy: string): string {
   if (periodicidad === 'unico') return fechaLimite
+  if (diasEntre(hoy, fechaLimite) >= 0) return fechaLimite
+
+  if (periodicidad === 'mensual') {
+    const base = aFechaLocal(fechaLimite)
+    const dia = base.getDate()
+    for (let n = 1; n <= 600; n++) {
+      const mes = new Date(base.getFullYear(), base.getMonth() + n, 1)
+      const ultimo = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate()
+      mes.setDate(Math.min(dia, ultimo))
+      const fecha = aISO(mes)
+      if (diasEntre(hoy, fecha) >= 0) return fecha
+    }
+    return fechaLimite
+  }
+
+  const paso = DIAS_POR_PERIODICIDAD[periodicidad] ?? 30
   let fecha = fechaLimite
   let vueltas = 0
   while (diasEntre(hoy, fecha) < 0 && vueltas < 600) {
-    if (periodicidad === 'mensual') {
-      const d = aFechaLocal(fecha)
-      d.setMonth(d.getMonth() + 1)
-      fecha = aISO(d)
-    } else {
-      fecha = sumarDias(fecha, DIAS_POR_PERIODICIDAD[periodicidad] ?? 30)
-    }
+    fecha = sumarDias(fecha, paso)
     vueltas++
   }
   return fecha

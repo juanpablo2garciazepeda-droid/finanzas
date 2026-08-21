@@ -478,3 +478,94 @@ export function correoDigest({
 
   return { asunto, texto, html };
 }
+
+
+export interface PagoProximo {
+  acreedor: string;
+  monto: string;
+  /** "vence en 3 días", "vence hoy", "venció hace 2 días". */
+  cuando: string;
+  fecha: string;
+  /** Marca el renglón en rojo. */
+  urgente: boolean;
+}
+
+/**
+ * Aviso de pagos que vencen.
+ *
+ * Es el correo que la notificación del navegador no puede dar: aquella se
+ * dispara la primera vez que abres la app, y quien lleva una semana sin
+ * abrirla es justo quien necesita el recordatorio. Un solo correo con todos
+ * los pagos que cambiaron de hito, nunca uno por deuda.
+ */
+export function correoVencimientos({
+  nombre,
+  pagos,
+  total,
+  enlaceApp,
+}: {
+  nombre: string;
+  pagos: PagoProximo[];
+  /** Suma de los pagos listados, ya formateada. */
+  total: string;
+  enlaceApp: string;
+}): CorreoArmado {
+  const vencidos = pagos.filter((p) => p.urgente).length;
+  const asunto =
+    vencidos > 0
+      ? `Tienes ${vencidos === 1 ? 'un pago vencido' : `${vencidos} pagos vencidos`}`
+      : pagos.length === 1
+        ? `${pagos[0].acreedor}: ${pagos[0].cuando}`
+        : `${pagos.length} pagos cerca`;
+
+  const texto = [
+    saludo(nombre),
+    '',
+    'Estos pagos necesitan tu atención:',
+    ...pagos.map((p) => `· ${p.acreedor} — ${p.monto} — ${p.cuando} (${p.fecha})`),
+    '',
+    `Total: ${total}`,
+    '',
+    'Si ya lo pagaste, regístralo en la app y deja de aparecer aquí.',
+    '',
+    enlaceApp,
+  ].join('\n');
+
+  const filas = pagos
+    .map(
+      (p) => `<tr>
+        <td style="padding:12px 0;border-bottom:1px solid ${FONDO};font-family:${TIPOGRAFIA};
+                   font-size:15px;color:${TINTA};">
+          <strong style="font-weight:600;">${escapeHtml(p.acreedor)}</strong><br />
+          <span style="font-size:13px;color:${p.urgente ? '#D70015' : SUAVE};">
+            ${escapeHtml(p.cuando)} · ${escapeHtml(p.fecha)}
+          </span>
+        </td>
+        <td align="right" style="padding:12px 0;border-bottom:1px solid ${FONDO};
+                   font-family:${TIPOGRAFIA};font-size:15px;font-weight:600;
+                   color:${p.urgente ? '#D70015' : TINTA};white-space:nowrap;">
+          ${escapeHtml(p.monto)}
+        </td>
+      </tr>`,
+    )
+    .join('\n');
+
+  const html = envoltura({
+    preheader: `${pagos.length === 1 ? pagos[0].acreedor : `${pagos.length} pagos`} · ${total}`,
+    contenido: [
+      titulo(vencidos > 0 ? 'Se te pasó un pago' : 'Tienes un pago cerca'),
+      parrafo(
+        `${saludo(nombre)} apártalo antes de gastarlo: son ${escapeHtml(total)} que ya tienen dueño.`,
+      ),
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 0 0;">${filas}</table>`,
+      boton(enlaceApp, 'Ver mis deudas'),
+      nota(
+        'Si ya lo pagaste, regístralo en la app y deja de aparecer aquí. Puedes apagar estos avisos en Ajustes → Alertas.',
+      ),
+    ].join('\n'),
+    piePersonalizado:
+      'Recibiste este correo porque tienes activados los avisos de vencimiento en Finanzas GZ.',
+  });
+
+  return { asunto, texto, html };
+}

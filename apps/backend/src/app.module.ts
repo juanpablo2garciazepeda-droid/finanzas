@@ -16,6 +16,7 @@ import { AuditoriaModule } from './auditoria/auditoria.module';
 import { RecurrentesModule } from './recurrentes/recurrentes.module';
 import { ImportExportModule } from './transacciones/import-export.module';
 import { DigestModule } from './digest/digest.module';
+import { RecordatoriosModule } from './recordatorios/recordatorios.module';
 import { EmailModule } from './auth/email.module';
 import { HealthModule } from './health/health.module';
 import { InicioModule } from './inicio/inicio.module';
@@ -41,7 +42,7 @@ import { dataSourceOptions } from './database/data-source';
       { name: 'default', ttl: 60_000, limit: 100 },
       { name: 'auth', ttl: 60_000, limit: 10 },
     ]),
-    // Para el cron del digest semanal.
+    // Para los cron: digest semanal y avisos diarios de vencimiento.
     ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
@@ -49,6 +50,7 @@ import { dataSourceOptions } from './database/data-source';
     RecurrentesModule,
     ImportExportModule,
     DigestModule,
+    RecordatoriosModule,
     EmailModule,
     CategoriasModule,
     TransaccionesModule,

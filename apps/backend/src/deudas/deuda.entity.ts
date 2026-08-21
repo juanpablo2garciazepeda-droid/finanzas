@@ -42,6 +42,19 @@ export class Deuda {
   @Column({ type: 'boolean', default: false })
   liquidada!: boolean;
 
+  /**
+   * Cuál de los tres hitos de aviso se mandó por correo —`previo`, `hoy` o
+   * `vencido`— y a qué vencimiento se refería. La pareja es lo que evita
+   * repetir el mismo correo todos los días y, a la vez, lo que hace que un
+   * pago mensual vuelva a avisar el mes siguiente: cambia la fecha, así que
+   * el hito vuelve a ser nuevo.
+   */
+  @Column({ name: 'ultimo_aviso_hito', type: 'text', nullable: true })
+  ultimoAvisoHito!: 'previo' | 'hoy' | 'vencido' | null;
+
+  @Column({ name: 'ultimo_aviso_fecha', type: 'text', nullable: true })
+  ultimoAvisoFecha!: string | null;
+
   @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creadoEn!: Date;
 

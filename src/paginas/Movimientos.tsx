@@ -63,7 +63,7 @@ export function Movimientos() {
 
   const ingresos = totalPorTipo(filtradas, 'ingreso')
   const egresos = totalPorTipo(filtradas, 'egreso')
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
 
   async function borrar(t: Transaccion) {
     await eliminarTransaccion(t.id)

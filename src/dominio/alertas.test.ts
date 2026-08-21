@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { calcularMargen, evaluarGasto, ingresoTipico, peorNivel } from './alertas'
-import { AJUSTES, contexto, deuda, meta, pago, presupuesto, transaccion } from './fixtures'
+import { AJUSTES, contexto, deuda, meta, pago, presupuesto, recurrente, transaccion } from './fixtures'
 
 const SUELDO = transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 2_000_000, fecha: '2026-08-01' })
 
@@ -511,11 +511,11 @@ describe('el disponible real manda en todas las superficies, no solo en el simul
    * la quincena todavía no cae y ya hay una deuda por vencer. El flujo del
    * ciclo (sueldo estimado) dice $6,500 libres; la cuenta dice otra cosa.
    *
-   * El arreglo anterior cruzó flujo y colchón dentro de `evaluarGasto`, pero
-   * dejó el cruce escondido ahí: el tablero, el desglose, el panel de dinero,
-   * las recomendaciones y el PDF siguieron leyendo `margenLibre` a secas. Por
-   * eso el tablero enseñaba "6,500 libres ÷ 12 días = 0 al día", una ecuación
-   * que no cuadra. El binding tiene que salir del dominio, una sola vez.
+   * Son tres restricciones distintas y la respuesta es la más apretada:
+   * la caja ($27), la solvencia al cierre (caja + sueldo − compromisos) y la
+   * prudencia (no repartir el ahorro de meses entre los días que quedan).
+   * Restar los compromisos de la caja y llamar a eso "lo que te queda en la
+   * cuenta" mezclaba las tres y producía cifras que nadie reconoce.
    */
   function cuentaFlacaQuincenaSinCaer() {
     return contexto({
@@ -531,13 +531,33 @@ describe('el disponible real manda en todas las superficies, no solo en el simul
     })
   }
 
-  it('margenDisponible es el mínimo entre el flujo del ciclo y el colchón real', () => {
+  it('lo gastable es lo que hay en la cuenta, no la cuenta menos los pagos que faltan', () => {
     const margen = calcularMargen(cuentaFlacaQuincenaSinCaer())
 
+    // La proyección del ciclo: el sueldo estimado menos el pago por vencer.
     expect(margen.margenLibre).toBe(650_000)
+    // El efectivo menos lo comprometido sí queda en negativo, y eso es un
+    // dato real: sin la quincena no alcanza para el pago. Pero NO es lo que
+    // se puede gastar, y menos aún "lo que queda en la cuenta".
     expect(margen.colchonTotal).toBe(-297_300)
-    expect(margen.margenDisponible).toBe(-297_300)
+    // Al cerrar la quincena, con el sueldo dentro, la cuenta sale a flote.
+    expect(margen.proyeccionCierre).toBe(652_700)
+    // Y hoy se puede gastar exactamente lo que hay en el banco: $27.
+    expect(margen.margenDisponible).toBe(2_700)
+    expect(margen.tope).toBe('caja')
     expect(margen.limitadoPorSaldo).toBe(true)
+  })
+
+  it('el faltante que se anuncia es contra la cuenta, no contra los compromisos', () => {
+    // El bug tal como lo vio el usuario: gasto de $200 con $27 en el banco y
+    // un pago de $3,000 por vencer. Faltan $173, no $3,173.
+    const veredicto = evaluarGasto(20_000, null, cuentaFlacaQuincenaSinCaer())
+    const texto = veredicto.razones.find((r) => r.clave === 'margen')?.texto ?? ''
+
+    expect(veredicto.nivel).toBe('rojo')
+    expect(texto).toContain('$173')
+    expect(texto).toContain('$27')
+    expect(texto).not.toContain('$3,173')
   })
 
   it('sin saldo declarado el disponible sigue siendo el flujo del ciclo', () => {
@@ -654,5 +674,89 @@ describe('decir "todavía no cobro" cambia las cuentas, no solo esconde la tarje
 
     expect(veredicto.nivel).toBe('rojo')
     expect(veredicto.margenDespues).toBe(-20_000)
+  })
+})
+
+describe('el margen razona como un balance: caja, flujo y compromisos', () => {
+  it('los gastos fijos que faltan por cobrarse cuentan como compromiso', () => {
+    // La renta del día 20 no es una sorpresa: ya está contratada. Verla solo
+    // el día que el backend genera el movimiento hacía que el margen se
+    // desplomara sin que hubiera pasado nada nuevo.
+    const ctx = contexto({
+      transacciones: [SUELDO],
+      recurrentes: [recurrente({ diaDelMes: 20, monto: 600_000 })],
+    })
+    const margen = calcularMargen(ctx)
+
+    expect(margen.compromisoRecurrente).toBe(600_000)
+    expect(margen.comprometido).toBe(600_000)
+    expect(margen.margenLibre).toBe(1_400_000)
+  })
+
+  it('la plantilla ya generada no se cobra dos veces', () => {
+    const ctx = contexto({
+      transacciones: [SUELDO, transaccion({ monto: 600_000, fecha: '2026-08-05', categoriaId: 'renta' })],
+      recurrentes: [recurrente({ diaDelMes: 5, monto: 600_000, ultimoGeneradoEn: '2026-08-05' })],
+    })
+    const margen = calcularMargen(ctx)
+
+    expect(margen.compromisoRecurrente).toBe(0)
+    expect(margen.egresos).toBe(600_000)
+  })
+
+  it('un ingreso con plantilla dice cuánto falta por entrar y qué día', () => {
+    const ctx = contexto({
+      ajustes: { ...AJUSTES, ingresoMensual: 2_500_000 },
+      recurrentes: [
+        recurrente({ tipo: 'ingreso', categoriaId: 'sueldo', diaDelMes: 25, monto: 1_800_000 }),
+      ],
+    })
+    const margen = calcularMargen(ctx)
+
+    // La plantilla gana sobre el sueldo configurado: trae fecha.
+    expect(margen.porEntrar).toBe(1_800_000)
+    expect(margen.fechaProximoCobro).toBe('2026-08-25')
+    expect(margen.ingresos).toBe(1_800_000)
+  })
+
+  it('un pago que vence después del cierre no se resta del ciclo en curso', () => {
+    // Quincena del 16 al 31; el pago cae el 3 de septiembre, dentro de la
+    // ventana de aviso de 7 días. Lo cubre la quincena siguiente, no esta:
+    // restarlo aquí hundía el margen por algo que ya tenía con qué pagarse.
+    const ctx = contexto({
+      hoy: '2026-08-29',
+      ajustes: { ...AJUSTES, cicloPago: 'quincenal', ingresoMensual: 1_900_000 },
+      transacciones: [
+        transaccion({ tipo: 'ingreso', categoriaId: 'sueldo', monto: 950_000, fecha: '2026-08-16' }),
+      ],
+      deudas: [deuda({ pagoMinimo: 300_000, fechaLimite: '2026-09-03' })],
+    })
+    const margen = calcularMargen(ctx)
+
+    expect(margen.compromisoDeuda).toBe(0)
+    expect(margen.comprometidoDespues).toBe(300_000)
+    expect(margen.margenLibre).toBe(950_000)
+  })
+
+  it('la proyección de cierre suma lo que falta por entrar; el colchón no', () => {
+    const ctx = contexto({
+      hoy: '2026-08-20',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_900_000,
+        saldoInicial: 2_700,
+        saldoInicialFecha: '2026-08-16',
+      },
+      deudas: [deuda({ pagoMinimo: 300_000, fechaLimite: '2026-08-25' })],
+    })
+    const margen = calcularMargen(ctx)
+
+    expect(margen.efectivoHoy).toBe(2_700)
+    expect(margen.porEntrar).toBe(950_000)
+    // Sin la quincena la cuenta no alcanza para el pago…
+    expect(margen.colchonTotal).toBe(-297_300)
+    // …pero con ella, el ciclo cierra en positivo.
+    expect(margen.proyeccionCierre).toBe(652_700)
   })
 })

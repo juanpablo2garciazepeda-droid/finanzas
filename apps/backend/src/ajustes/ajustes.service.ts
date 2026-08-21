@@ -22,6 +22,7 @@ const CAMPOS_EDITABLES = [
   'diasAvisoVencimiento',
   'umbralPrecaucion',
   'notificacionesActivas',
+  'avisosCorreoVencimientos',
   'ultimaRevisionVencimientos',
 ] as const satisfies readonly (keyof Ajuste)[];
 

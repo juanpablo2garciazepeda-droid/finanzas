@@ -70,7 +70,7 @@ export function Tablero() {
   if (cargando) return <Esqueleto />
   if (!hayDatos) return <Bienvenida />
 
-  const dinero = (c: number) => formatearMoneda(c, moneda, locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, moneda, locale, { conDecimales: 'auto' })
 
   return (
     <div className="space-y-6">

@@ -127,7 +127,7 @@ export function Recurrentes() {
                     )}
                   >
                     {r.tipo === 'ingreso' ? '+' : '-'}
-                    {formatearMoneda(r.monto, ajustes.moneda, ajustes.locale, { conDecimales: false })}
+                    {formatearMoneda(r.monto, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })}
                   </span>
                   <button
                     type="button"
@@ -285,7 +285,7 @@ function EditorRecurrente({
           />
           {monto && (
             <p className="mt-1 text-[12px] text-tenue">
-              ≈ {formatearMoneda(montoCentavos, moneda, locale, { conDecimales: false })}
+              ≈ {formatearMoneda(montoCentavos, moneda, locale, { conDecimales: 'auto' })}
             </p>
           )}
         </Campo>

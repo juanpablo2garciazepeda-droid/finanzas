@@ -4,7 +4,14 @@ import { calcularMargen } from './alertas'
 import { formatearMoneda, sumar } from './dinero'
 import { diasEntre, enDias, nombrePeriodo, periodoAnterior, ultimosPeriodos } from './fechas'
 import { esteCiclo } from './ciclos'
-import { deudaPrioritaria, mesesAhorrados, proyectarDeuda } from './deudas'
+import { formatearFechaCorta } from './fechas'
+import {
+  deudaPrioritaria,
+  mesesAhorrados,
+  obligacionMensual,
+  proximosVencimientos,
+  proyectarDeuda,
+} from './deudas'
 import { proyectarMeta } from './metas'
 import { calcularSalud } from './salud'
 import {
@@ -74,12 +81,81 @@ function umbral(clave: keyof typeof PROPORCION, referencia: number): number {
   return Math.max(PISO[clave], Math.round(referencia * PROPORCION[clave]))
 }
 
+
+/**
+ * Las razones que un contador calcula antes de opinar.
+ *
+ * Un consejo que no viene de una proporción es una corazonada: "gastas mucho
+ * en comida" no le dice nada a quien gana el triple. Estas cuatro son las
+ * que deciden si una economía personal aguanta un mes malo, y las cuatro
+ * tienen umbrales que no se inventaron aquí.
+ */
+export interface Indicadores {
+  /** Ingreso mensual de referencia. Cero = no hay con qué medir. */
+  ingresoMensual: number
+  /** Gasto medio al mes, de los tres meses anteriores completos. */
+  gastoMensual: number
+  /**
+   * Servicio de deuda sobre ingreso. La banca corta en 36% para dar crédito
+   * y en 43% para una hipoteca; por encima de ahí el presupuesto ya no tiene
+   * de dónde absorber un imprevisto.
+   */
+  cargaDeuda: number
+  /**
+   * Gasto fijo comprometido sobre ingreso: renta, servicios, suscripciones,
+   * mensualidades. Por encima del 50% no queda margen que administrar.
+   */
+  cargaFija: number
+  /** Lo que se aparta al mes sobre lo que entra. El piso sano es 10%. */
+  tasaAhorro: number
+  /** Meses de gasto que cubre el efectivo de hoy. Tres es el mínimo. */
+  mesesDeColchon: number | null
+}
+
+export function calcularIndicadores(ctx: ContextoFinanciero): Indicadores {
+  const margen = calcularMargen(ctx)
+  const ingresoMensual = referenciaMensual(ctx, margen.ingresos, margen.ciclo.porMes)
+  const gastoMensual = promedioEgresosMensuales(ctx)
+
+  // Gasto fijo al mes: lo que cada plantilla activa cobra en un mes completo,
+  // sin importar en qué punto del ciclo estemos hoy. La razón mide estructura,
+  // no calendario.
+  const mes = ctx.hoy.slice(0, 7)
+  const gastoFijoMensual = sumar(
+    (ctx.recurrentes ?? [])
+      .filter((r) => r.activo && r.tipo === 'egreso')
+      .filter((r) => {
+        const fecha = `${mes}-${String(r.diaDelMes).padStart(2, '0')}`
+        return fecha >= r.iniciaEn && (!r.terminaEn || fecha <= r.terminaEn)
+      })
+      .map((r) => r.monto),
+  )
+
+  const ahorroMensual = sumar(
+    ctx.metas.filter((m) => !m.completada).map((m) => m.aporteMensual),
+  )
+
+  const razon = (parte: number) => (ingresoMensual > 0 ? parte / ingresoMensual : 0)
+
+  return {
+    ingresoMensual,
+    gastoMensual,
+    cargaDeuda: razon(obligacionMensual(ctx.deudas)),
+    cargaFija: razon(gastoFijoMensual),
+    tasaAhorro: razon(ahorroMensual),
+    mesesDeColchon:
+      margen.efectivoHoy === null || gastoMensual <= 0
+        ? null
+        : margen.efectivoHoy / gastoMensual,
+  }
+}
+
 export function generarRecomendaciones(
   ctx: ContextoFinanciero,
   pagos: PagoDeuda[],
 ): Recomendacion[] {
   const f = { moneda: ctx.ajustes.moneda, locale: ctx.ajustes.locale }
-  const dinero = (c: number) => formatearMoneda(c, f.moneda, f.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, f.moneda, f.locale, { conDecimales: 'auto' })
   const lista: Recomendacion[] = []
   const margen = calcularMargen(ctx)
   // Todos los umbrales de este archivo se escalan con esto.
@@ -475,6 +551,100 @@ export function generarRecomendaciones(
       titulo: `Te sobran ${dinero(margen.margenDisponible)} y ${esteCiclo(margen.ciclo.tipo)} cierra en ${margen.ciclo.diasRestantes} ${margen.ciclo.diasRestantes === 1 ? 'día' : 'días'}`,
       detalle: 'Muévelo hoy a una meta o a tu deuda más cara. Lo que se queda en la cuenta al empezar el siguiente ciclo se gasta solo.',
       icono: 'PiggyBank',
+    })
+  }
+
+
+  // ── Razones financieras ────────────────────────────────────────────────
+  //
+  // Lo que un contador mira antes que el detalle de las categorías: si la
+  // estructura aguanta. Ninguna depende de en qué día del mes se consulte.
+
+  const ind = calcularIndicadores(ctx)
+  const pct = (x: number) => `${Math.round(x * 100)}%`
+
+  if (ind.ingresoMensual > 0 && ind.cargaDeuda > 0.36) {
+    const critico = ind.cargaDeuda > 0.43
+    lista.push({
+      id: 'carga-deuda',
+      tipo: 'deuda',
+      prioridad: critico ? 1 : 2,
+      titulo: `Tus deudas se llevan ${pct(ind.cargaDeuda)} de lo que ganas`,
+      detalle: critico
+        ? `Arriba del 43% ningún banco te presta, y no por capricho: no queda de dónde salir si algo falla. Bajar a ${dinero(Math.round(ind.ingresoMensual * 0.36))} al mes es el primer objetivo, aunque sea alargando plazos.`
+        : `El límite sano son 36 puntos, o sea ${dinero(Math.round(ind.ingresoMensual * 0.36))} al mes. Estás encima: cualquier gasto no previsto va a salir de una tarjeta.`,
+      icono: 'Scale',
+    })
+  }
+
+  if (ind.ingresoMensual > 0 && ind.cargaFija > 0.5) {
+    lista.push({
+      id: 'carga-fija',
+      tipo: 'presupuesto',
+      prioridad: 2,
+      titulo: `Tus gastos fijos comprometen ${pct(ind.cargaFija)} de tu ingreso`,
+      detalle: `Renta, servicios y suscripciones se cobran solos: pasado el 50% ya no hay presupuesto que administrar, solo lo que sobre. Lo que se recorta aquí rinde todos los meses, no una vez.`,
+      icono: 'Repeat',
+    })
+  }
+
+  if (ind.mesesDeColchon !== null && ind.mesesDeColchon < 3 && ind.gastoMensual > 0) {
+    const meses = ind.mesesDeColchon
+    lista.push({
+      id: 'colchon-corto',
+      tipo: 'meta',
+      prioridad: meses < 1 ? 1 : 3,
+      titulo:
+        meses < 1
+          ? 'Tu cuenta no cubre un mes de gastos'
+          : `Tu cuenta cubre ${meses.toFixed(1)} meses de gastos`,
+      detalle: `Gastas ${dinero(ind.gastoMensual)} al mes. Tres meses son ${dinero(Math.round(ind.gastoMensual * 3))}: es la diferencia entre un imprevisto y una deuda cara. Te faltan ${dinero(Math.max(0, Math.round(ind.gastoMensual * 3) - Math.round(ind.gastoMensual * meses)))}.`,
+      icono: 'Umbrella',
+    })
+  }
+
+  if (ind.ingresoMensual > 0 && ind.tasaAhorro > 0 && ind.tasaAhorro < 0.1) {
+    lista.push({
+      id: 'tasa-ahorro',
+      tipo: 'meta',
+      prioridad: 4,
+      titulo: `Estás apartando ${pct(ind.tasaAhorro)} de lo que ganas`,
+      detalle: `El piso que se recomienda es 10%, o sea ${dinero(Math.round(ind.ingresoMensual * 0.1))} al mes. Prográmalo el día que cobras: lo que sobra a fin de mes nunca sobra.`,
+      icono: 'PiggyBank',
+    })
+  }
+
+  // Descalce de flujo: hay un pago con fecha antes de que caiga el cobro y la
+  // cuenta de hoy no lo cubre. Es el problema que hunde a la gente que sí
+  // tiene con qué pagar — solo que no el día que le toca.
+  if (margen.efectivoHoy !== null && margen.compromisoDeuda > margen.efectivoHoy) {
+    const proximo = proximosVencimientos(ctx.deudas, ctx.hoy, margen.ciclo.diasRestantes)[0]
+    if (proximo) {
+      lista.push({
+        id: 'descalce-flujo',
+        tipo: 'deuda',
+        prioridad: 1,
+        titulo: `El pago a ${proximo.deuda.acreedor} vence antes de que tengas con qué`,
+        detalle: `Vence el ${formatearFechaCorta(proximo.fecha, f.locale)} y son ${dinero(proximo.monto)}; en la cuenta hay ${dinero(margen.efectivoHoy)}. ${margen.porEntrar > 0 ? `Tu cobro de ${dinero(margen.porEntrar)} lo cubre, pero comprueba que caiga antes de esa fecha.` : 'No hay ingreso previsto antes de esa fecha: mueve el pago o consigue el dinero ahora, no el día que venza.'}`,
+        icono: 'CalendarClock',
+      })
+    }
+  }
+
+  // El ahorro que convive con una tarjeta cara pierde dinero todos los meses.
+  const cara = ctx.deudas
+    .filter((d) => !d.liquidada && d.saldoActual > 0 && (d.tasaInteres ?? 0) >= 25)
+    .sort((a, b) => (b.tasaInteres ?? 0) - (a.tasaInteres ?? 0))[0]
+  const ahorroDisponible = ctx.metas.reduce((suma, m) => suma + m.montoActual, 0)
+  if (cara && ahorroDisponible > 0) {
+    const costoAnual = Math.round(Math.min(ahorroDisponible, cara.saldoActual) * ((cara.tasaInteres ?? 0) / 100))
+    lista.push({
+      id: 'ahorro-contra-deuda-cara',
+      tipo: 'oportunidad',
+      prioridad: 2,
+      titulo: `Ahorrar mientras pagas ${cara.tasaInteres}% te cuesta ${dinero(costoAnual)} al año`,
+      detalle: `Tienes ${dinero(ahorroDisponible)} apartados y ${dinero(cara.saldoActual)} con ${cara.acreedor} al ${cara.tasaInteres}% anual. Ninguna cuenta de ahorro paga eso: mientras las dos cosas convivan, estás pagando por guardar tu propio dinero. Deja solo el fondo de emergencia y el resto va al saldo.`,
+      icono: 'Scale',
     })
   }
 

@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Repeat,
+  Shield,
   ShieldOff,
   Trash2,
   Wallet,
@@ -357,6 +358,30 @@ export function Ajustes() {
             </label>
           </div>
 
+          {/* El correo va aparte del permiso del navegador: aquel solo se
+              dispara con la app abierta, y quien lleva una semana sin abrirla
+              es justo quien necesita el recordatorio. */}
+          <div className="border-t border-borde pt-4">
+            <label className="flex items-start gap-3">
+              <Mail className="mt-0.5 size-4 text-tenue" aria-hidden />
+              <span className="flex-1">
+                <span className="block text-sm text-tinta">{t('ajustes.avisos_correo')}</span>
+                <span className="mt-0.5 block text-xs text-tenue">
+                  {t('ajustes.avisos_correo_ayuda', { n: ajustes.diasAvisoVencimiento })}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={ajustes.avisosCorreoVencimientos}
+                onChange={(e) => {
+                  void guardarAjustes({ avisosCorreoVencimientos: e.target.checked })
+                  mostrar(t(e.target.checked ? 'aviso.correo_pagos_si' : 'aviso.correo_pagos_no'))
+                }}
+                className="size-4 shrink-0 accent-acento"
+              />
+            </label>
+          </div>
+
           <div className="border-t border-borde pt-4">
             <label className="flex items-start gap-3">
               <Mail className="mt-0.5 size-4 text-tenue" aria-hidden />
@@ -474,6 +499,31 @@ export function Ajustes() {
           <ChevronRight className="size-5 text-suave" aria-hidden />
         </Link>
       </section>
+
+      {/* ── 7b. Administración ───────────────────────────────────────
+          Solo para `rol: 'admin'`. En escritorio el panel también cuelga de
+          la barra lateral, pero en móvil no hay barra: sin esta tarjeta un
+          admin con teléfono se quedaba sin camino al panel. */}
+      {usuario?.rol === 'admin' && (
+        <section>
+          <TituloSeccion>{t('admin.titulo')}</TituloSeccion>
+          <Link
+            to="/admin"
+            className="flex items-center justify-between gap-3 rounded-tarjeta bg-superficie p-4 shadow-tarjeta transition-colors hover:bg-elevada sm:p-5"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 items-center justify-center rounded-full bg-acento/10 text-acento">
+                <Shield className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm text-tinta">{t('admin.entrar_panel')}</p>
+                <p className="mt-0.5 text-[13px] text-tenue">{t('admin.ayuda')}</p>
+              </div>
+            </div>
+            <ChevronRight className="size-5 text-suave" aria-hidden />
+          </Link>
+        </section>
+      )}
 
       {/* ── 8. Tus datos (exportar, importar, reportes) ──────────────── */}
       <SeccionDesplegable
@@ -781,7 +831,7 @@ function CampoIngreso({
       mostrar(
         centavos > 0
           ? t('aviso.ingreso_ok', {
-              monto: formatearMoneda(centavos, moneda, locale, { conDecimales: false }),
+              monto: formatearMoneda(centavos, moneda, locale, { conDecimales: 'auto' }),
             })
           : t('aviso.ingreso_quitado'),
       )

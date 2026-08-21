@@ -228,8 +228,17 @@
     color-scheme: light;
     /* Sin scroll horizontal accidental: si algo se desborda, se recorta
        en vez de empujar el ancho de la página y forzar al usuario a
-       pellizcar para hacer zoom out en móvil. */
-    overflow-x: hidden;
+       pellizcar para hacer zoom out en móvil.
+
+       `clip` y NO `hidden`: `overflow-x: hidden` convierte al <html> en
+       contenedor de scroll, y entonces todo `position: sticky` de dentro
+       calcula su posición contra ese contenedor en vez de contra el
+       viewport. El efecto en producción era que la barra lateral y el
+       encabezado se iban hacia arriba al bajar y ya no volvían — se notaba
+       sobre todo en Ajustes, que es la página más larga. `clip` recorta
+       igual pero no crea contenedor de scroll, así que sticky sigue
+       funcionando. */
+    overflow-x: clip;
     /* Sin esto, Safari/Chrome en iOS pintan un recuadro gris-azul sobre
        cualquier botón o enlace al tocarlo. Aquí ya existe feedback propio
        (whileTap, active:scale-95, hover:bg-elevada), así que el recuadro del

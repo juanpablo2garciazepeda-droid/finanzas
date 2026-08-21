@@ -3,7 +3,7 @@ import { HandCoins } from 'lucide-react'
 import type { Margen } from '@/dominio/alertas'
 import { esteCiclo } from '@/dominio/ciclos'
 import { formatearMoneda } from '@/dominio/dinero'
-import { hoyISO } from '@/dominio/fechas'
+import { formatearFechaCorta, hoyISO } from '@/dominio/fechas'
 import { crearTransaccion } from '@/datos/repositorio'
 import { useAvisos } from '@/estado/avisos'
 import { useFinanzas } from '@/estado/finanzas'
@@ -38,7 +38,7 @@ export function ConfirmarCobro({ margen }: { margen: Margen }) {
     categoriasActivas.find((c) => c.tipo === 'ingreso')
 
   const texto = formatearMoneda(margen.ingresos, ajustes.moneda, ajustes.locale, {
-    conDecimales: false,
+    conDecimales: 'auto',
   })
 
   async function registrar() {
@@ -77,8 +77,21 @@ export function ConfirmarCobro({ margen }: { margen: Margen }) {
       <div className="min-w-0 flex-1">
         <p className="font-display text-[17px] font-semibold text-tinta">¿Ya cobraste?</p>
         <p className="mt-0.5 text-[15px] text-suave">
-          Estoy calculando {esteCiclo(margen.ciclo.tipo)} con {texto} estimados de tu sueldo. Si ya
-          cayeron, regístralos y los números pasan a ser reales.
+          {/* Con una plantilla de ingreso recurrente no es una estimación: se
+              sabe el monto y el día. Llamarla "estimado" ahí resta confianza a
+              un dato que la persona misma configuró. */}
+          {margen.fechaProximoCobro ? (
+            <>
+              Estoy calculando {esteCiclo(margen.ciclo.tipo)} contando los {texto} que caen el{' '}
+              {formatearFechaCorta(margen.fechaProximoCobro, ajustes.locale)}. Si ya cayeron,
+              regístralos y dejan de ser una proyección.
+            </>
+          ) : (
+            <>
+              Estoy calculando {esteCiclo(margen.ciclo.tipo)} con {texto} estimados de tu sueldo. Si
+              ya cayeron, regístralos y los números pasan a ser reales.
+            </>
+          )}
         </p>
       </div>
       <div className="flex shrink-0 gap-2">

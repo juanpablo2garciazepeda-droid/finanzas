@@ -4,6 +4,7 @@ import type {
   AporteMeta,
   Categoria,
   Deuda,
+  GastoRecurrente,
   Meta,
   PagoDeuda,
   Presupuesto,
@@ -33,6 +34,8 @@ export interface EstadoFinanzas {
   pagos: PagoDeuda[]
   metas: Meta[]
   aportes: AporteMeta[]
+  /** Plantillas de gasto e ingreso fijo. Son compromisos con fecha. */
+  recurrentes: GastoRecurrente[]
   /** Lo que consume la capa de dominio. */
   ctx: ContextoFinanciero
   hayMovimientos: boolean
@@ -148,6 +151,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
     const metas = datos?.metas ?? []
     const aportes = datos?.aportes ?? []
     const pagos = datos?.pagos ?? []
+    const recurrentes = datos?.recurrentes ?? []
 
     // El suelo del navegador de mes. Se mira todo lo que tiene fecha propia y
     // no solo los movimientos: quien cargó una deuda o declaró su saldo antes
@@ -185,6 +189,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
       pagos,
       metas,
       aportes,
+      recurrentes,
       ctx: {
         hoy,
         periodo,
@@ -196,6 +201,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         pagos,
         metas,
         aportes,
+        recurrentes,
         cicloSinCobrar,
       },
       cicloSinCobrar,
@@ -206,6 +212,7 @@ export function ProveedorFinanzas({ children }: { children: ReactNode }) {
         deudas.length > 0 ||
         metas.length > 0 ||
         presupuestos.length > 0 ||
+        recurrentes.length > 0 ||
         ajustes.ingresoMensual > 0 ||
         ajustes.saldoInicial > 0,
       refrescar,
@@ -263,6 +270,7 @@ function ajustesPorDefecto(): Ajustes {
     diasAvisoVencimiento: 7,
     umbralPrecaucion: 0.8,
     notificacionesActivas: false,
+    avisosCorreoVencimientos: true,
     ultimaRevisionVencimientos: '',
   }
 }

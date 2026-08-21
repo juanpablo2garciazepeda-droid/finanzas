@@ -264,7 +264,13 @@ function BarraLateral({
         )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3">
+      {/* `min-h-0` es lo que permite que este bloque se encoja dentro del
+          `h-dvh` de la barra. Sin él, un flex item con `flex-1` no baja de la
+          altura de su contenido: con seis secciones y una ventana corta, el
+          botón de Ajustes quedaba empujado por debajo del borde inferior y no
+          había forma de alcanzarlo. Con `overflow-y-auto` las secciones hacen
+          scroll entre ellas y el pie queda siempre visible. */}
+      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3">
         {SECCIONES.map(({ ruta, clave, Icono }) => (
           <ItemNav
             key={ruta}
@@ -286,7 +292,7 @@ function BarraLateral({
         )}
       </nav>
 
-      <div className="relative px-3">
+      <div className="relative shrink-0 px-3 pt-1">
         <button
           type="button"
           aria-haspopup="menu"

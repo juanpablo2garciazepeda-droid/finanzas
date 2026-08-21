@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { generarRecomendaciones } from './recomendaciones'
-import { AJUSTES, CATEGORIAS, contexto, deuda, meta, presupuesto, transaccion } from './fixtures'
+import { calcularIndicadores, generarRecomendaciones } from './recomendaciones'
+import {
+  AJUSTES,
+  CATEGORIAS,
+  contexto,
+  deuda,
+  meta,
+  presupuesto,
+  recurrente,
+  transaccion,
+} from './fixtures'
 
 const SUELDO = transaccion({
   tipo: 'ingreso',
@@ -220,5 +229,103 @@ describe('las recomendaciones no reparten dinero que no está en la cuenta', () 
     })
 
     expect(claves(ctx)).not.toContain('excedente-deuda')
+  })
+})
+
+describe('razones financieras', () => {
+  const CON_SUELDO = { ...AJUSTES, ingresoMensual: 2_000_000 }
+
+  it('la carga de deuda es la obligación mensual sobre el ingreso', () => {
+    const ctx = contexto({
+      ajustes: CON_SUELDO,
+      // 800,000 al mes contra 2,000,000 de ingreso = 40%.
+      deudas: [deuda({ pagoMinimo: 800_000, saldoActual: 5_000_000, periodicidad: 'mensual' })],
+    })
+    expect(calcularIndicadores(ctx).cargaDeuda).toBeCloseTo(0.4, 5)
+  })
+
+  it('avisa cuando la deuda pasa del 36% y sube de prioridad pasado el 43%', () => {
+    const alta = contexto({
+      ajustes: CON_SUELDO,
+      deudas: [deuda({ pagoMinimo: 800_000, saldoActual: 5_000_000 })],
+    })
+    expect(claves(alta)).toContain('carga-deuda')
+
+    const critica = contexto({
+      ajustes: CON_SUELDO,
+      deudas: [deuda({ pagoMinimo: 1_000_000, saldoActual: 5_000_000 })],
+    })
+    const r = generarRecomendaciones(critica, []).find((x) => x.id === 'carga-deuda')
+    expect(r?.prioridad).toBe(1)
+
+    const sana = contexto({
+      ajustes: CON_SUELDO,
+      deudas: [deuda({ pagoMinimo: 200_000, saldoActual: 5_000_000 })],
+    })
+    expect(claves(sana)).not.toContain('carga-deuda')
+  })
+
+  it('la carga fija sale de las plantillas activas, no del calendario', () => {
+    const ctx = contexto({
+      ajustes: CON_SUELDO,
+      recurrentes: [
+        recurrente({ diaDelMes: 1, monto: 900_000 }),
+        // Ya pasó su día este mes: sigue siendo gasto fijo del mes.
+        recurrente({ diaDelMes: 3, monto: 300_000 }),
+        recurrente({ diaDelMes: 20, monto: 100_000, activo: false }),
+      ],
+    })
+    expect(calcularIndicadores(ctx).cargaFija).toBeCloseTo(0.6, 5)
+    expect(claves(ctx)).toContain('carga-fija')
+  })
+
+  it('mide el colchón en meses de gasto, no en pesos sueltos', () => {
+    const ctx = contexto({
+      ajustes: { ...CON_SUELDO, saldoInicial: 500_000, saldoInicialFecha: '2026-08-01' },
+      transacciones: [
+        transaccion({ monto: 1_000_000, fecha: '2026-07-10', categoriaId: 'renta' }),
+        transaccion({ monto: 1_000_000, fecha: '2026-06-10', categoriaId: 'renta' }),
+      ],
+    })
+    const ind = calcularIndicadores(ctx)
+    expect(ind.gastoMensual).toBe(1_000_000)
+    expect(ind.mesesDeColchon).toBeCloseTo(0.5, 5)
+    expect(claves(ctx)).toContain('colchon-corto')
+  })
+
+  it('sin saldo declarado no inventa un colchón', () => {
+    expect(calcularIndicadores(contexto({ ajustes: CON_SUELDO })).mesesDeColchon).toBeNull()
+  })
+
+  it('avisa del descalce cuando el pago vence antes de que haya con qué', () => {
+    const ctx = contexto({
+      hoy: '2026-08-20',
+      ajustes: {
+        ...AJUSTES,
+        cicloPago: 'quincenal',
+        ingresoMensual: 1_900_000,
+        saldoInicial: 2_700,
+        saldoInicialFecha: '2026-08-16',
+      },
+      deudas: [deuda({ acreedor: 'Nu', pagoMinimo: 300_000, fechaLimite: '2026-08-25' })],
+    })
+    const r = generarRecomendaciones(ctx, []).find((x) => x.id === 'descalce-flujo')
+
+    expect(r?.prioridad).toBe(1)
+    expect(r?.titulo).toContain('Nu')
+    expect(r?.detalle).toContain('$27')
+  })
+
+  it('señala el ahorro que convive con una tarjeta cara', () => {
+    const ctx = contexto({
+      ajustes: CON_SUELDO,
+      transacciones: [SUELDO],
+      deudas: [deuda({ acreedor: 'Tarjeta', saldoActual: 3_000_000, tasaInteres: 45 })],
+      metas: [meta({ id: 'm1', montoActual: 1_000_000, aporteMensual: 200_000 })],
+    })
+    const r = generarRecomendaciones(ctx, []).find((x) => x.id === 'ahorro-contra-deuda-cara')
+
+    // 1,000,000 apartados al 45% cuestan 450,000 al año.
+    expect(r?.titulo).toContain('$4,500')
   })
 })

@@ -43,7 +43,7 @@ export function Metas() {
 
   const activas = metas.filter((m) => !m.completada)
   const completadas = metas.filter((m) => m.completada)
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
   const aporteMensualTotal = activas.reduce((total, m) => total + m.aporteMensual, 0)
 
   async function mover(meta: Meta, direccion: -1 | 1) {
@@ -283,7 +283,7 @@ function FormularioMeta({
   const meses = Math.max(1, mesesEntre(hoy, fechaLimite))
   const aporteMensual = faltante === 0 ? 0 : Math.ceil(faltante / meses)
 
-  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: false })
+  const dinero = (c: number) => formatearMoneda(c, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })
   const valido = nombre.trim() !== '' && montoObjetivo > 0
 
   function fijarPlazo(enMeses: number) {
@@ -449,7 +449,7 @@ function FormularioAporte({ meta, onCerrar }: { meta: Meta; onCerrar: () => void
     mostrar(
       nuevo >= meta.montoObjetivo
         ? `¡Alcanzaste ${meta.nombre}!`
-        : `Aporte registrado. Llevas ${formatearMoneda(nuevo, ajustes.moneda, ajustes.locale, { conDecimales: false })}`,
+        : `Aporte registrado. Llevas ${formatearMoneda(nuevo, ajustes.moneda, ajustes.locale, { conDecimales: 'auto' })}`,
     )
     onCerrar()
   }
