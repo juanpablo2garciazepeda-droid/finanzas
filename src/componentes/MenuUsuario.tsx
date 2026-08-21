@@ -36,8 +36,10 @@ import { Avatar } from './Avatar'
  * Se cierra con click fuera, Escape o después de ejecutar una acción.
  */
 export type PosicionMenu = {
-  /** Coordenada top en píxeles del viewport. */
-  top: number
+  /** Coordenada top en píxeles del viewport. Se ignora si `bottom` está definido. */
+  top?: number
+  /** Coordenada bottom en píxeles del viewport. Tiene prioridad sobre `top`. */
+  bottom?: number
   /** Coordenada left en píxeles del viewport. */
   left: number
   /** Punto de origen para la animación (CSS `transform-origin`). */
@@ -108,7 +110,13 @@ export function MenuUsuario({
           style={
             posicion
               ? {
-                  top: posicion.top,
+                  // `bottom` toma precedencia: cuando el menú se ancla al
+                  // borde de abajo del viewport, dejamos que `top` lo decida
+                  // el contenido (junto con `max-h` y `overflow-y-auto` se
+                  // mantiene dentro de pantalla aunque sea muy largo).
+                  ...(posicion.bottom !== undefined
+                    ? { bottom: posicion.bottom }
+                    : { top: posicion.top }),
                   left: posicion.left,
                   transformOrigin: `${posicion.originX} ${posicion.originY}`,
                 }

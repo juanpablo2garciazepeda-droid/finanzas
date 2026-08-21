@@ -31,8 +31,10 @@ const ANCHO_MENU = 288 // w-72 de Tailwind
 
 /**
  * Calcula la posición del popover según el trigger y el ancho del sidebar.
- * En desktop el menú va pegado a la esquina inferior derecha del sidebar.
- * En mobile va debajo del trigger, alineado a la derecha.
+ * En desktop el menú va pegado a la esquina inferior izquierda del sidebar
+ * (justo a la derecha del botón de Ajustes), anclado al fondo del viewport
+ * para que crezca hacia arriba y nunca se salga por abajo. En mobile va
+ * debajo del trigger, alineado a la derecha.
  */
 function calcularPosicionMenu(
   trigger: HTMLElement,
@@ -42,7 +44,11 @@ function calcularPosicionMenu(
   const caja = trigger.getBoundingClientRect()
   if (esDesktop) {
     return {
-      top: window.innerHeight - 16, // 16px de margen inferior
+      // 16px de margen inferior. Usar `bottom` (no `top: innerHeight - 16`)
+      // porque la intención era anclar el menú al borde de abajo, no poner
+      // su tope superior ahí: con `top` el menú crecía hacia abajo y se
+      // salía del viewport (el contenido del menú mide varios cientos de px).
+      bottom: 16,
       left: anchoSidebar + 8,
       originX: 'left',
       originY: 'bottom',
